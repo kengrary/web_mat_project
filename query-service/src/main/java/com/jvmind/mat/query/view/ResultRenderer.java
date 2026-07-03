@@ -8,6 +8,9 @@ import org.eclipse.mat.query.IResultTable;
 import org.eclipse.mat.query.IResultTree;
 import org.eclipse.mat.query.results.CompositeResult;
 import org.eclipse.mat.query.results.TextResult;
+import org.eclipse.mat.report.QuerySpec;
+import org.eclipse.mat.report.SectionSpec;
+import org.eclipse.mat.report.Spec;
 
 import java.util.List;
 
@@ -18,9 +21,11 @@ import java.util.List;
  * <ul>
  *   <li>{@link IResultTable} → 表格（行+列，行带 objectId 便于跳转/投喂）；</li>
  *   <li>{@link IResultTree} → 树（一次一层，<b>懒加载</b>，不递归整棵树，对齐 MAT UI 效率）；</li>
- *   <li>{@link TextResult} → 文本/HTML（leakhunter 的结论段就是这个）；</li>
- *   <li>{@link CompositeResult} → 复合（leakhunter 报告 = 多个子结果，递归渲染）；</li>
- *   <li>其它 → toString 兜底。</li>
+ *   <li>{@link TextResult} → 文本/HTML；</li>
+ *   <li>{@link CompositeResult} → 复合（具名子结果列表，递归渲染）；</li>
+ *   <li>{@link SectionSpec} → leakhunter 等 HTML 报告 query 返回的 section 树，按 composite 形态展开；</li>
+ *   <li>{@link QuerySpec} → 带 drill-down command 的具名子结果，展开内嵌 result 并透出 command；</li>
+ *   <li>其它 → toString 兜底（{@code kind:"raw"}）。</li>
  * </ul>
  *
  * <p>有了它，接入一个新 query 只需：QueryRunner.run(...) → ResultRenderer.render(...)。
@@ -75,8 +80,61 @@ public final class ResultRenderer {
                     .raw("sections", sections.endArr())
                     .endObj();
         }
+        if (result instanceof SectionSpec section) {
+            Json parts = Json.arr();
+            List<Spec> children = section.getChildren();
+            if (children != null) {
+                for (Spec child : children) {
+                    parts.item(renderSpec(child, depth + 1));
+                }
+            }
+            Json out = Json.obj().kv("kind", "section");
+            if (section.getName() != null) out.kv("name", section.getName());
+            if (section.getStatus() != null) out.kv("status", section.getStatus().name());
+            out.raw("parts", parts.endArr());
+            return out.endObj();
+        }
+        if (result instanceof QuerySpec qs) {
+            return renderQuerySpec(qs, depth);
+        }
+        if (result instanceof Spec spec) {
+            return renderSpec(spec, depth);
+        }
         // 兜底
         return Json.obj().kv("kind", "raw").kv("value", String.valueOf(result)).endObj();
+    }
+
+    private static String renderSpec(Spec spec, int depth) {
+        if (spec instanceof QuerySpec qs) return renderQuerySpec(qs, depth);
+        if (spec instanceof SectionSpec section) {
+            // 递归进入 render(IResult) 分支会再判 SectionSpec；这里直接内联以避免走 render 的空/深度检查重复报错
+            Json parts = Json.arr();
+            List<Spec> children = section.getChildren();
+            if (children != null) {
+                for (Spec child : children) {
+                    parts.item(renderSpec(child, depth + 1));
+                }
+            }
+            Json out = Json.obj().kv("kind", "section");
+            if (section.getName() != null) out.kv("name", section.getName());
+            if (section.getStatus() != null) out.kv("status", section.getStatus().name());
+            out.raw("parts", parts.endArr());
+            return out.endObj();
+        }
+        // 裸 Spec 基类本身：只带 name/params，没有 result
+        Json out = Json.obj().kv("kind", "spec");
+        if (spec.getName() != null) out.kv("name", spec.getName());
+        return out.endObj();
+    }
+
+    private static String renderQuerySpec(QuerySpec qs, int depth) {
+        Json out = Json.obj().kv("kind", "query");
+        if (qs.getName() != null) out.kv("name", qs.getName());
+        String cmd = qs.getCommand();
+        if (cmd != null && !cmd.isEmpty()) out.kv("command", cmd);
+        IResult inner = qs.getResult();
+        out.raw("result", render(inner, depth + 1));
+        return out.endObj();
     }
 
     // ===================== 表格 =====================

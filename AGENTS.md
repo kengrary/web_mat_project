@@ -9,7 +9,7 @@ JVMind × Eclipse MAT heapdump-analysis module. Companion Python/FastAPI workspa
 - `mat-study/` — 14 Chinese design docs (numbered `01-` … `14-`, skips `11`). Authoritative architecture/API rationale.
 - `web-prototype/` — single-file `index.html` vanilla-JS UI mock; no build, no deps.
 - `uploads/` — docs only (Java integration guide, old Vue refactor draft). **Not** a runtime upload directory.
-- `mat-src/` — 114 MB upstream Eclipse MAT source copy for code-reading reference. Excluded from git; re-download with `git clone https://github.com/eclipse-mat/mat.git` if missing.
+- `mat-src/` — 114 MB upstream Eclipse MAT source copy for code-reading reference. Excluded from git; re-download with `git clone https://github.com/eclipse-mat/mat.git` if missing. This MUST be kept at the same major.minor as the installed MAT at `/home/pan/mat` (currently 1.17.x nightly); after upgrading MAT, re-clone/update mat-src so method signatures match what's running — prefer reading mat-src for business logic (e.g. how LeakHunterQuery builds its SectionSpec) and `javap` against `$MAT/plugins/org.eclipse.mat.*_*.jar` for verifying exact public signatures.
 
 Top-level docs: `MEMORY-SNAPSHOT.md` (cheapest context reload) → `README.md` → `IMPLEMENTATION_GUIDE.md` (API contract bible) → `EXECUTION_PLAN.md` (rollout phases) → `PROJECT-STATUS.md`.
 

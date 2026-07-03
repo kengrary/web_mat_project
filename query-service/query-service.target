@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<?pde version="3.8"?>
+<!--
+  方案B（离线）：Tycho target platform 直接吃本地 MAT 发行版的 plugins/ 目录。
+
+  关键：用 type="Directory" 指向 MAT 发行版【根目录】（其下的 plugins/ 含所有 bundle jar）。
+  这避开了 "MAT 根目录不是 p2 仓库" 的问题——Directory location 不需要 artifacts.xml/content.xml，
+  它直接扫描 plugins/ 里带 OSGi MANIFEST 的 jar。
+
+  用法：把 <location path> 改成你的 MAT 路径（如 /home/pan/mat），
+  然后 pom.xml 的 target-platform-configuration 引用本 .target（见 pom 注释）。
+-->
+<target name="mat-local-dist" sequenceNumber="1">
+  <locations>
+    <!-- 指向 MAT 发行版根目录；Directory 类型会扫描其 plugins/ 下的 bundle -->
+    <location path="/home/pan/mat" type="Directory"/>
+
+    <!--
+      还需要 Equinox/JDT 等核心 runtime —— MAT 发行版的 plugins/ 里其实已经全有了
+      （org.eclipse.osgi / equinox.* / core.runtime 等 185 个 jar 都在），
+      所以上面这一个 Directory location 通常就够覆盖 Require-Bundle 的全部依赖。
+
+      若构建报缺某个 bundle，再补一个联网 p2 兜底（可选）：
+    -->
+    <!--
+    <location includeAllPlatforms="false" includeMode="planner" type="InstallableUnit">
+      <repository location="https://download.eclipse.org/releases/2023-03/"/>
+      <unit id="org.eclipse.equinox.app" version="0.0.0"/>
+    </location>
+    -->
+  </locations>
+</target>

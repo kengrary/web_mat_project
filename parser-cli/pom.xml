@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.jvmind.mat</groupId>
+    <artifactId>parser-cli</artifactId>
+    <version>0.1.0</version>
+    <packaging>jar</packaging>
+    <name>JVMind Heapdump Parser CLI</name>
+
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- 与本地 MAT 发行版对齐：1.17.0 要求 JDK21 -->
+        <mat.version>1.17.0</mat.version>
+    </properties>
+
+    <dependencies>
+        <!--
+          ============================================================
+          MAT 核心 4 个制品（排除 ui/chart/rcp）。
+          MAT 官方用 Tycho/p2 发布 OSGi bundle，未发布到 Maven Central。
+          落地时三选一：
+            1) 从 MAT 发行版 plugins/ 目录取 jar，mvn install:install-file 装进本地仓；
+            2) 自建 Tycho 构建产出后安装；
+            3) 用 <scope>system</scope> + <systemPath> 直接指向 jar（仅本地，不推荐发布）。
+          下面用占位坐标，请替换为你环境的真实坐标/路径。
+          ============================================================
+        -->
+        <dependency>
+            <groupId>org.eclipse.mat</groupId>
+            <artifactId>org.eclipse.mat.api</artifactId>
+            <version>${mat.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.mat</groupId>
+            <artifactId>org.eclipse.mat.report</artifactId>
+            <version>${mat.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.mat</groupId>
+            <artifactId>org.eclipse.mat.parser</artifactId>
+            <version>${mat.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.mat</groupId>
+            <artifactId>org.eclipse.mat.hprof</artifactId>
+            <version>${mat.version}</version>
+        </dependency>
+
+        <!--
+          方式 A（Equinox headless）需要 Equinox 启动器与 OSGi 运行时；
+          方式 B（直连 SnapshotFactory）则需 MAT 依赖的 org.eclipse.core.runtime 等。
+          按所选方式补齐。占位如下：
+        -->
+        <dependency>
+            <groupId>org.eclipse.platform</groupId>
+            <artifactId>org.eclipse.osgi</artifactId>
+            <version>3.18.600</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- 轻量 JSON 输出（也可换成你团队统一的库，如 Jackson） -->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.11.0</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>parser-cli</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.3</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals><goal>shade</goal></goals>
+                        <configuration>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.jvmind.mat.parser.Main</mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

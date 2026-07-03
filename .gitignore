@@ -1,0 +1,45 @@
+# Build output (Maven/Tycho)
+target/
+**/target/
+*.class
+*.jar
+!**/src/**/test-jars/*.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+.factorypath
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Logs
+*.log
+logs/
+
+# Python (future / parser-cli v1 scripts)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Upstream MAT reference source (114 MB, re-downloadable via git clone)
+mat-src/
+
+# Archive of mat-study (kept in repo only for historical transfer; can be regenerated)
+mat-study.zip
+
+# Runtime data (actual production paths are configured on Python side)
+data/
+*.hprof
+*.hprof.*
+*.index
+*.threads

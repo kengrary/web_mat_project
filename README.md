@@ -1,0 +1,110 @@
+# JVMind × MAT — Heapdump 智能分析模块
+
+> 基于 Eclipse Memory Analyzer (MAT) 内核，为现有 JVMind 平台增加 **Java 堆转储（heapdump）分析能力**：
+> 上传 → 解析 → 类 MAT 的 Web 查询 → 领域诊断（连接池泄漏等）→ 自然语言 Agent 诊断。
+>
+> **当前状态**：Java 侧（解析 + 查询服务）已实测跑通；Python 侧串通待开发。详见 [PROJECT-STATUS.md](./PROJECT-STATUS.md)。
+
+---
+
+## 🚀 新人 5 分钟入门
+
+1. **想了解项目全貌** → 读本文件 +「[mat-study/README.md](./mat-study/README.md)」（项目蓝图）。
+2. **想知道现在做到哪了** → [PROJECT-STATUS.md](./PROJECT-STATUS.md)（已完成 / 待办 / 踩坑经验）。
+3. **是 Python 团队、要接手开发** → [TODO-PYTHON-TEAM.md](./TODO-PYTHON-TEAM.md)（任务清单 + 接口契约 + 验收）。
+4. **想把查询服务跑起来** → [query-service/DEPLOY.md](./query-service/DEPLOY.md)（部署 + curl 验证）。
+5. **想跑通解析** → [parser-cli/v1-parsehd/README.md](./parser-cli/v1-parsehd/README.md)（零编译，发行版即可）。
+
+---
+
+## 架构一图
+
+```
+  用户上传 heapdump
+        │
+   [Python/FastAPI]  ← 待开发(TODO-PYTHON-TEAM.md)
+   上传/队列/进度/鉴权/Agent
+        ├── fork ─────────────▶ [parser-cli / V1]  hprof → *.index   ✅已实测
+        │                              （写 NFS）
+        └── 内网反代 ──────────▶ [query-service]    读 index 提供查询  ✅已跑通
+                                  (OSGi bundle, :8090)
+                                  histogram/支配树/线程树/OQL
+                                  + Leak Suspects/path2gc 等
+        共享：NFS(dump 文件) + PostgreSQL(任务/报告)
+```
+
+---
+
+## 目录结构与文档导航
+
+### 📁 顶层
+| 文件 | 内容 |
+|---|---|
+| [README.md](./README.md) | 本文件，总索引 |
+| [PROJECT-STATUS.md](./PROJECT-STATUS.md) | 总进度：里程碑、三模块状态、待办、**踩坑经验**（必读） |
+| [TODO-PYTHON-TEAM.md](./TODO-PYTHON-TEAM.md) | 给 Python 团队的串通任务清单（表/上传/队列/反代/agent + 验收 + 参考物料） |
+
+### 📁 mat-study/ — 设计文档（从研究到落地）
+| # | 文档 | 解决什么 |
+|---|---|---|
+| — | [README.md](./mat-study/README.md) | **项目蓝图入口**（四层架构、决策表、里程碑） |
+| 01 | [MAT源码研究与架构设计](./mat-study/01-MAT源码研究与架构设计.md) | MAT 怎么实现、怎么复用；index 文件格式 |
+| 02 | [核心算法深挖与落地方案](./mat-study/02-核心算法深挖与落地方案.md) | 支配树/路径/retained 算法；Web 后端怎么搭 |
+| 03 | [超越OOM-连接池泄漏排查](./mat-study/03-超越OOM-连接池泄漏等问题排查思路.md) | 堆镜像还能查什么；连接池/线程池/ClassLoader 诊断 |
+| 04 | [接口工具化-诊断Agent思路](./mat-study/04-MAT接口工具化-自然语言诊断Agent思路.md) | LLM 怎么驱动 MAT；工具粒度/出参瘦身 |
+| 05 | [全链路系统集成设计](./mat-study/05-全链路系统集成设计.md) | 上传/队列/进度/三层软引用防 OOM |
+| 06 | [技术选型确认与四大视图API](./mat-study/06-技术选型确认与四大视图API设计.md) | 选型固化 + 四大视图 API 契约 |
+| 07 | [与现有JVMind系统对接](./mat-study/07-与现有JVMind系统对接落地方案.md) | 如何接入现有平台（**Python 团队必读**） |
+| 08 | [MAT功能盘点与实现缺口](./mat-study/08-MAT功能盘点与实现缺口.md) | 57 个 query 盘点 + 缺口优先级 |
+| 09 | [前端实现建议-复刻MAT体验](./mat-study/09-前端实现建议-复刻MAT体验.md) | Web 前端怎么接近 MAT 体验（通用建议）|
+| 10 | [MAT-Inspector能力盘点](./mat-study/10-MAT-Inspector能力盘点与实现建议.md) | Inspector 全部能力 + 已实现项 |
+| 12 | [Python串通执行计划](./mat-study/12-Python串通执行计划.md) | Python 接入 Java 侧分阶段计划 |
+| 13 | [OOM线程级诊断思路](./mat-study/13-OOM线程级诊断思路.md) | OOM 触发线程识别 + SQL 提取（超越 MAT）|
+| 14 | [heapdump前端落地设计-对齐真实端点](./mat-study/14-heapdump前端落地设计-对齐真实端点.md) | 前端**可执行**落地（端点映射+异步状态机+集成红线，**前端团队必读**）|
+
+### 📁 parser-cli/ — 解析层（hprof → index）
+| 文件 | 内容 |
+|---|---|
+| [README.md](./parser-cli/README.md) | 解析器总览（V1/V2 两版路线） |
+| [MAT-DEPENDENCIES.md](./parser-cli/MAT-DEPENDENCIES.md) | **MAT 依赖怎么拿**（版本↔JDK、三种获取方式、bundle 清单） |
+| [v1-parsehd/README.md](./parser-cli/v1-parsehd/README.md) | **V1 方案**（零编译，发行版 ParseHeapDump + 文本进度）★当前用 |
+| [v1-parsehd/VERIFICATION.md](./parser-cli/v1-parsehd/VERIFICATION.md) | V1 实测报告（真实 hprof 跑通 + 修了 3 个 bug） |
+| `v1-parsehd/mat_parse_runner.py` | 进度解析器（Python，已实测，供 worker 复用） |
+| `python-worker-snippet.py` | worker 调解析器的可用片段 |
+| `src/.../*.java` | V2 骨架（自写 jar + JSONL 进度，待切换） |
+
+### 📁 query-service/ — 查询层（OSGi bundle，:8090）✅ 已跑通
+| 文件 | 内容 |
+|---|---|
+| [README.md](./query-service/README.md) | 服务总览（端点、SnapshotManager 三层软引用、路线2） |
+| [DEPLOY.md](./query-service/DEPLOY.md) | **部署 + 端到端验证**（bundles.info 注册 + -clean；curl 示例）★实操看这个 |
+| [EQUINOX-A-VERIFICATION.md](./query-service/EQUINOX-A-VERIFICATION.md) | Equinox 嵌入实测 + CNF 缺陷修正（为什么选路线2） |
+| [BUILD-TROUBLESHOOTING.md](./query-service/BUILD-TROUBLESHOOTING.md) | 构建排错（p2 仓库、JDK 版本匹配） |
+| `src/.../*.java` (21 个) | 服务实现：core/http/model/task/view/equinox |
+
+---
+
+## 三个模块速查
+
+| 模块 | 形态 | 状态 | 关键入口文件 |
+|---|---|---|---|
+| **parser-cli** | V1=发行版命令；V2=独立 jar | ✅ V1 实测可用 | `v1-parsehd/mat_parse_runner.py` |
+| **query-service** | OSGi bundle (HTTP :8090) | ✅ 已跑通+实测 | `QueryServiceApp.java` / `QueryHttpServer.java` |
+| **Python 串通** | FastAPI + DB + agent | ⏳ 待开发 | 见 `TODO-PYTHON-TEAM.md` |
+
+---
+
+## 关键事实速记（避免重复踩坑，详见 PROJECT-STATUS.md）
+- MAT 依赖不在 Maven Central → 用 Tycho（`eclipse-plugin`）+ p2/Directory，不写 `<dependencies>`。
+- 版本↔JDK：**1.17→JDK21**、1.14→JDK17、1.12→JDK11（三处须一致）。
+- 部署：jar 放 `plugins/` + `bundles.info` 加一行（auto-start=true）+ **`-clean`** 重启（不是 dropins）。
+- 查询服务无鉴权，仅内网；由 Python 反代时带 `dumpDir`（= dump 目录）。
+- reopen 需要 hprof + index 都在可随机 seek 的文件系统（NFS 满足）。
+
+---
+
+## 技术栈
+- **解析/查询**：Java 21 + Eclipse MAT 1.17（OSGi/Equinox）
+- **主控/上传/Agent**：Python + FastAPI（现有 JVMind 平台）
+- **存储**：NFS（dump 文件）+ PostgreSQL（任务/报告，双进程共享）
+- **许可证**：MAT 为 EPL-2.0（复用其 bundle，注意分发声明）

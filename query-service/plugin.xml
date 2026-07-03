@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <!--
+     注册 query-service 为一个 headless OSGi application。
+     启动: ./MemoryAnalyzer -consoleLog -nosplash -application com.jvmind.mat.query.app
+     id 的全称 = <Bundle-SymbolicName>.<extension id> = com.jvmind.mat.query.app
+   -->
+   <extension
+         id="app"
+         point="org.eclipse.core.runtime.applications">
+      <application
+            cardinality="singleton-global"
+            thread="main"
+            visible="true">
+         <run class="com.jvmind.mat.query.QueryServiceApp" />
+      </application>
+   </extension>
+</plugin>

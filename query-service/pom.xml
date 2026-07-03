@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.jvmind.mat</groupId>
+    <artifactId>com.jvmind.mat.query</artifactId>
+    <version>0.1.0</version>
+    <!--
+      ★ 路线2：作为 OSGi bundle 打包（Tycho eclipse-plugin）。
+      产物是一个标准 OSGi bundle jar，放进 MAT 发行版的 dropins/ 即可被加载，
+      与 MAT 同类空间 → 直接 import org.eclipse.mat.* 可用，无需反射。
+    -->
+    <packaging>eclipse-plugin</packaging>
+
+    <properties>
+        <tycho.version>4.0.8</tycho.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.eclipse.tycho</groupId>
+                <artifactId>tycho-maven-plugin</artifactId>
+                <version>${tycho.version}</version>
+                <extensions>true</extensions>
+            </plugin>
+            <plugin>
+                <groupId>org.eclipse.tycho</groupId>
+                <artifactId>target-platform-configuration</artifactId>
+                <version>${tycho.version}</version>
+                <configuration>
+                    <executionEnvironment>JavaSE-21</executionEnvironment>
+                    <pomDependencies>consider</pomDependencies>
+                    <!--
+                      ★ 方案B（离线，推荐给你这种已有本地 MAT 的情况）：用 .target 文件，
+                         它用 Directory location 直接吃 /home/pan/mat 的 plugins/，
+                         不需要 p2 索引（避开 "No repository found" 报错）。
+                         先把 query-service.target 里的 path 改成 /home/pan/mat。
+                    -->
+                    <target>
+                        <file>${project.basedir}/query-service.target</file>
+                    </target>
+                    <!--
+                      若用方案A（联网 update-site），删掉上面 <target>，并保留下方 <repositories>。
+                    -->
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <!--
+      默认用方案B（上面的 <target> 文件），所以这里 <repositories> 注释掉。
+      ── 方案A（联网 update-site，标准 p2 仓库，实测 artifacts.jar/content.jar 200）──
+      若想用方案A：把上面 target-platform-configuration 的 <target> 删掉，并解开下面注释：
+      版本↔JDK：1.15.x→JDK21，1.14.0→JDK17，1.12.0→JDK11（1.12 已归档，域名用 archive.eclipse.org）。
+
+    <repositories>
+        <repository>
+            <id>mat-p2</id>
+            <layout>p2</layout>
+            <url>https://download.eclipse.org/mat/1.14.0/update-site/</url>
+        </repository>
+    </repositories>
+    -->
+    <repositories/>
+
+    <!--
+      构建：
+        mvn -f query-service/pom.xml clean package   （首次联网拉 p2，较慢）
+      产物：
+        target/com.jvmind.mat.query-0.1.0.jar  （OSGi bundle）
+      部署：
+        cp 该 jar 到 <MAT_HOME>/dropins/
+        ./MemoryAnalyzer -consoleLog -nosplash -application com.jvmind.mat.query.app -vmargs -Xmx16g
+
+      ── 方案B（离线，指向本地 /home/pan/mat）的 .target 写法 ──
+      新建 query-service.target，内容（关键是 type="Directory" 指向 plugins 的父目录）：
+        <target name="mat-local">
+          <locations>
+            <location path="/home/pan/mat" type="Directory"/>   ← 直接吃发行版的 plugins/
+          </locations>
+        </target>
+      然后在 target-platform-configuration 加：
+        <target><artifact><groupId>..</groupId><artifactId>..</artifactId>
+                <version>..</version></artifact></target>
+      （需把 .target 作为一个 artifact 模块）。比方案A 麻烦，建议优先方案A。
+    -->
+</project>
+

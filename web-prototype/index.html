@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JVMind Heapdump Analyzer — 原型</title>
+<style>
+  /* 全部内联，无外部资源（兼容沙箱预览 iframe） */
+  * { box-sizing: border-box; }
+  :root {
+    --bg:#1e1e2e; --panel:#282a36; --panel2:#21222c; --line:#3a3d4d;
+    --fg:#e0e0e0; --muted:#9aa0b0; --accent:#7aa2f7; --accent2:#bb9af7;
+    --bar:#3b4261; --barfill:#7aa2f7; --ok:#9ece6a; --warn:#e0af68; --err:#f7768e;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif; font-size:13px; }
+  #app { display:grid; grid-template-rows:auto 1fr; height:100vh; }
+
+  /* 顶部工具条 */
+  .toolbar { display:flex; align-items:center; gap:12px; padding:8px 12px; background:var(--panel2);
+    border-bottom:1px solid var(--line); }
+  .toolbar .title { font-weight:600; color:var(--accent2); }
+  .toolbar .spacer { flex:1; }
+  .toolbar input, .toolbar select, .toolbar button {
+    background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:6px;
+    padding:5px 9px; font-size:12px; }
+  .toolbar button { cursor:pointer; }
+  .toolbar button:hover { border-color:var(--accent); }
+  .badge { font-size:11px; padding:2px 7px; border-radius:10px; }
+  .badge.mock { background:#3a2f1a; color:var(--warn); }
+  .badge.live { background:#1a3a23; color:var(--ok); }
+
+  /* 三区布局 */
+  .layout { display:grid; grid-template-columns:200px 1fr 300px; height:100%; overflow:hidden; }
+  .nav { background:var(--panel2); border-right:1px solid var(--line); padding:8px; overflow:auto; }
+  .nav h4 { color:var(--muted); font-size:11px; text-transform:uppercase; margin:12px 6px 4px; }
+  .nav .item { padding:7px 10px; border-radius:6px; cursor:pointer; display:flex; gap:8px; align-items:center; }
+  .nav .item:hover { background:var(--panel); }
+  .nav .item.active { background:var(--bar); color:var(--accent); }
+  .nav .item .ico { width:14px; text-align:center; opacity:.8; }
+
+  .center { display:grid; grid-template-rows:auto 1fr; overflow:hidden; }
+  .tabs { display:flex; gap:2px; background:var(--panel2); border-bottom:1px solid var(--line); padding:4px 6px 0; overflow-x:auto; }
+  .tab { padding:6px 12px; background:var(--panel); border:1px solid var(--line); border-bottom:none;
+    border-radius:6px 6px 0 0; cursor:pointer; white-space:nowrap; display:flex; gap:8px; align-items:center; color:var(--muted); }
+  .tab.active { background:var(--bg); color:var(--fg); }
+  .tab .x { opacity:.5; } .tab .x:hover { opacity:1; color:var(--err); }
+  .view { overflow:auto; padding:0; position:relative; }
+
+  .inspector { background:var(--panel2); border-left:1px solid var(--line); overflow:auto; padding:12px; }
+  .inspector h3 { font-size:12px; color:var(--accent2); margin:0 0 8px; }
+  .inspector .empty { color:var(--muted); font-style:italic; }
+  .kv { display:grid; grid-template-columns:90px 1fr; gap:4px 8px; font-size:12px; margin-bottom:10px; }
+  .kv .k { color:var(--muted); } .kv .v { font-family:var(--mono); word-break:break-all; }
+  .insp-actions button { width:100%; text-align:left; margin:3px 0; background:var(--panel);
+    color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 9px; cursor:pointer; font-size:12px; }
+  .insp-actions button:hover { border-color:var(--accent); color:var(--accent); }
+  .reflist { font-size:12px; margin-bottom:10px; }
+  .refrow { padding:3px 4px; border-radius:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .refrow:hover { background:var(--panel); }
+  .refrow .rn { color:var(--accent2); font-family:var(--mono); margin-right:4px; }
+  .reflink { color:var(--accent); text-decoration:none; cursor:pointer; }
+  .reflink:hover { text-decoration:underline; }
+  .more { color:var(--muted); font-style:italic; padding:2px 4px; }
+  .rsbar { background:var(--panel); border:1px solid var(--accent); border-radius:8px;
+    padding:8px 12px; margin:8px 12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:12px; }
+  .rsbar code { background:var(--panel2); padding:1px 5px; border-radius:4px; color:var(--accent2); }
+  .rsbar button { background:var(--panel2); color:var(--accent); border:1px solid var(--line);
+    border-radius:6px; padding:5px 10px; cursor:pointer; }
+  .rsbar button:hover { border-color:var(--accent); }
+  .sqlcard { margin:8px 12px; border:1px solid var(--line); border-radius:8px; background:var(--panel); cursor:pointer; overflow:hidden; }
+  .sqlcard:hover { border-color:var(--accent); }
+  .sqlhead { display:flex; gap:10px; align-items:center; padding:8px 12px; background:var(--panel2); flex-wrap:wrap; }
+  .sqlthread { color:var(--accent2); font-size:12px; }
+  .tret { font-size:11px; font-family:var(--mono); color:var(--muted); }
+  .tret.big { color:var(--err); font-weight:600; }
+  .sqlsrc { color:var(--muted); font-size:11px; margin-left:auto; }
+  .sqltext { margin:0; padding:10px 12px; font-family:var(--mono); font-size:12px; color:var(--ok);
+    white-space:pre-wrap; word-break:break-all; background:var(--bg); }
+  .sqlmeta { padding:6px 12px; font-size:11px; color:var(--muted); }
+  .sqlframe { font-family:var(--mono); }
+  .poolcard { margin:10px 16px; border:1px solid var(--line); border-radius:8px; background:var(--panel); padding:10px 14px; }
+  .poolhead { display:flex; gap:10px; align-items:center; margin-bottom:6px; }
+  .poolinspect { margin-left:auto; background:var(--panel2); color:var(--accent); border:1px solid var(--line); border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px; }
+  .poolinspect:hover { border-color:var(--accent); }
+  .poolcard h4 { font-size:11px; text-transform:uppercase; }
+  .leakcard { margin:8px 16px; border:1px solid var(--line); border-radius:8px; background:var(--panel); padding:8px 12px; cursor:pointer; }
+  .leakcard.leak { border-color:var(--err); background:#3a1a1f; }
+  .leakcard:hover { border-color:var(--accent); }
+  .leakhead { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .leakstack { margin-top:6px; font-family:var(--mono); font-size:11px; color:var(--ok); line-height:1.7; }
+  .leakmeta { margin-top:6px; font-size:11px; color:var(--muted); }
+  .connrow { padding:4px 8px; margin:2px 0; border-radius:5px; font-family:var(--mono); font-size:12px; cursor:pointer; }
+  .connrow:hover { background:var(--bar); }
+  .connrow.active { color:var(--accent); }
+  .oombanner { margin:12px 16px; padding:12px 14px; border-radius:8px; font-size:13px; line-height:1.6; }
+  .oombanner.culprit { background:#3a1a1f; border:1px solid var(--err); }
+  .oombanner.victim { background:#3a2f1a; border:1px solid var(--warn); }
+  .oombanner code { background:rgba(0,0,0,.3); padding:1px 5px; border-radius:4px; }
+  /* Inspector 字段表（Type/Name/Value + 搜索 + 排序） */
+  .field-search { width:100%; margin:4px 0 6px; background:var(--panel); color:var(--fg);
+    border:1px solid var(--line); border-radius:6px; padding:5px 8px; font-size:12px; }
+  .ftbl { border:1px solid var(--line); border-radius:6px; overflow:hidden; margin-bottom:12px; font-size:12px; }
+  .fhead { display:flex; background:var(--panel2); border-bottom:1px solid var(--line);
+    color:var(--muted); font-size:11px; text-transform:uppercase; }
+  .fhead .fc { padding:5px 8px; cursor:pointer; user-select:none; }
+  .fhead .fc:hover { color:var(--accent); }
+  .fhead .fc.sorted { color:var(--accent); }
+  .frow { display:flex; border-bottom:1px solid #2a2c3a; }
+  .frow:last-child { border-bottom:none; }
+  .frow:hover { background:var(--panel); }
+  .fc.type { width:60px; color:var(--accent2); font-family:var(--mono); flex-shrink:0; }
+  .fc.name { width:110px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; }
+  .fc.val  { flex:1; min-width:0; font-family:var(--mono); word-break:break-all; }
+  .valbox { background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    padding:8px 10px; font-family:var(--mono); font-size:12px; word-break:break-all;
+    white-space:pre-wrap; max-height:160px; overflow:auto; margin-bottom:10px; color:var(--ok); }
+
+  /* 概览卡片 */
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; padding:16px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .card .num { font-size:22px; font-weight:600; color:var(--accent); }
+  .card .lbl { color:var(--muted); font-size:11px; margin-top:4px; }
+
+  /* 表格 / 树 */
+  .grid { width:100%; }
+  .ghead { position:sticky; top:0; background:var(--panel2); display:flex; border-bottom:1px solid var(--line);
+    font-size:11px; color:var(--muted); text-transform:uppercase; z-index:2; }
+  .ghead .gc { padding:8px 10px; cursor:pointer; user-select:none; }
+  .ghead .gc:hover { color:var(--accent); }
+  .grow { display:flex; border-bottom:1px solid #2a2c3a; cursor:pointer; }
+  .grow:hover { background:var(--panel); }
+  .grow.sel { background:var(--bar); }
+  .gc { padding:6px 10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .gc.num { text-align:right; font-family:var(--mono); }
+  .gc.name { flex:1; min-width:0; }
+  .bar { height:4px; background:var(--bar); border-radius:2px; margin-top:3px; }
+  .bar > i { display:block; height:100%; background:var(--barfill); border-radius:2px; }
+  .twig { color:var(--muted); display:inline-block; width:16px; text-align:center; }
+  .pill { font-size:10px; padding:1px 5px; border-radius:8px; background:#2a2c3a; color:var(--muted); margin-left:6px; }
+  .approx { color:var(--warn); }
+
+  /* 右键菜单 */
+  .ctx { position:fixed; background:var(--panel); border:1px solid var(--line); border-radius:8px;
+    box-shadow:0 6px 24px rgba(0,0,0,.4); padding:4px; z-index:100; min-width:200px; }
+  .ctx .mi { padding:7px 12px; border-radius:6px; cursor:pointer; font-size:12px; }
+  .ctx .mi:hover { background:var(--bar); color:var(--accent); }
+  .ctx .sep { height:1px; background:var(--line); margin:4px 0; }
+
+  .loading { padding:20px; color:var(--muted); }
+  .toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--panel);
+    border:1px solid var(--accent); border-radius:8px; padding:10px 16px; z-index:200; }
+  .note { padding:14px 16px; color:var(--muted); font-size:12px; line-height:1.6; }
+  .note code { background:var(--panel); padding:1px 5px; border-radius:4px; font-family:var(--mono); color:var(--accent); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="toolbar">
+    <span class="title">🔬 JVMind Heapdump Analyzer</span>
+    <span class="badge mock" id="modeBadge">MOCK 数据</span>
+    <span class="spacer"></span>
+    <label style="color:var(--muted);font-size:12px">后端</label>
+    <input id="baseUrl" value="http://127.0.0.1:8090" style="width:170px" title="query-service 地址">
+    <input id="dumpDir" value="/path/to/dump" style="width:160px" title="dump 目录(含 hprof+index)">
+    <button id="connectBtn">连接真实后端</button>
+  </div>
+
+  <div class="layout">
+    <!-- 左：类 MAT 菜单 -->
+    <div class="nav" id="nav">
+      <h4>概览</h4>
+      <div class="item active" data-view="overview"><span class="ico">📊</span>Overview</div>
+      <h4>视图</h4>
+      <div class="item" data-view="histogram"><span class="ico">📈</span>Histogram</div>
+      <div class="item" data-view="dominator"><span class="ico">🌲</span>Dominator Tree</div>
+      <div class="item" data-view="threads"><span class="ico">🧵</span>Threads</div>
+      <div class="item" data-view="threadlocals"><span class="ico">🧷</span>ThreadLocals</div>
+      <h4>诊断</h4>
+      <div class="item" data-view="diagnoseOom"><span class="ico">🧪</span>OOM 复合诊断</div>
+      <div class="item" data-view="leak"><span class="ico">🩺</span>Leak Suspects</div>
+      <div class="item" data-view="sql"><span class="ico">🗄️</span>SQL in Threads</div>
+      <div class="item" data-view="pools"><span class="ico">🔌</span>Connection Pools</div>
+      <div class="item" data-view="oql"><span class="ico">🔎</span>OQL</div>
+    </div>
+
+    <!-- 中：Tab 容器 -->
+    <div class="center">
+      <div class="tabs" id="tabs"></div>
+      <div class="view" id="view"></div>
+    </div>
+
+    <!-- 右：Inspector -->
+    <div class="inspector" id="inspector">
+      <h3>Inspector</h3>
+      <div class="empty">选中某个对象查看详情</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   说明：本原型默认用 MOCK 数据（内置，数值来自真实 dump 实测），
+   连不到后端也能完整演示交互。点"连接真实后端"切到 query-service。
+   —— 演示重点：虚拟滚动表 + 懒加载树 + Tab + 右键联动 + Inspector。
+   ========================================================================= */
+
+const State = { live:false, base:'', dumpDir:'', tabs:[], activeTab:null, selected:null };
+
+/* ---------- 后端适配层：mock 或 真实 fetch ---------- */
+const API = {
+  async overview() {
+    if (!State.live) return MOCK.overviewFull;
+    return fetchJSON(`/overview?dumpDir=${enc(State.dumpDir)}&full=true`);
+  },
+  async histogram(top=200, offset=0, sort='shallow', objectSet=null) {
+    if (!State.live) return MOCK.histogram(top, offset, sort, objectSet);
+    const os = objectSet ? `&objectSet=${enc(objectSet)}` : '';
+    return fetchJSON(`/histogram?dumpDir=${enc(State.dumpDir)}&top=${top}&offset=${offset}&sort=${sort}${os}`);
+  },
+  async retainedSet(objectSet) {  // 演示：对结果集算 retained（真实为异步 taskId，这里简化）
+    if (!State.live) return MOCK.retainedSet(objectSet);
+    return fetchJSON(`/retained-set?dumpDir=${enc(State.dumpDir)}&objectSet=${enc(objectSet)}`, 'POST', '{}');
+  },
+  async dominator(parent='ROOT', top=100, offset=0) {
+    if (!State.live) return MOCK.dominator(parent, top, offset);
+    return fetchJSON(`/dominator?dumpDir=${enc(State.dumpDir)}&parent=${parent}&top=${top}&offset=${offset}`);
+  },
+  async threads() {
+    if (!State.live) return MOCK.threads();
+    return fetchJSON(`/threads?dumpDir=${enc(State.dumpDir)}`);
+  },
+  async threadFrames(threadId) {
+    if (!State.live) return MOCK.threadFrames(threadId);
+    return fetchJSON(`/threads?dumpDir=${enc(State.dumpDir)}&thread=${threadId}`);
+  },
+  async threadLocals(threadId, frameIdx) {
+    if (!State.live) return MOCK.threadLocals(threadId, frameIdx);
+    return fetchJSON(`/threads?dumpDir=${enc(State.dumpDir)}&thread=${threadId}&frame=${frameIdx}`);
+  },
+  async object(id) {
+    if (!State.live) return MOCK.object(id);
+    return fetchJSON(`/object?dumpDir=${enc(State.dumpDir)}&id=${id}`);  // 后端 ObjectView
+  },
+  async oql(q, view='list', sort='') {
+    if (!State.live) return MOCK.oql(q, view, sort);
+    return fetchJSON(`/oql?dumpDir=${enc(State.dumpDir)}&view=${view}&sort=${sort}`, 'POST',
+      JSON.stringify({q, limit:200, offset:0}));
+  },
+  async threadlocals(groupBy='valueClass') {
+    if (!State.live) return MOCK.threadlocals(groupBy);
+    return fetchJSON(`/threadlocals?dumpDir=${enc(State.dumpDir)}&groupBy=${groupBy}&top=100`);
+  },
+  async sqlInThreads(onlyRisky=true) {
+    if (!State.live) return MOCK.sqlInThreads(onlyRisky);
+    return fetchJSON(`/sql-in-threads?dumpDir=${enc(State.dumpDir)}&onlyRisky=${onlyRisky}`);
+  },
+  async oomDiagnosis() {
+    if (!State.live) return MOCK.oomDiagnosis();
+    return fetchJSON(`/oom-diagnosis?dumpDir=${enc(State.dumpDir)}`);
+  },
+  async diagnoseOom() {
+    if (!State.live) return MOCK.diagnoseOom();
+    // 真实后端：异步任务（含 leakhunter）→ 提交拿 taskId，轮询 /tasks/{id}
+    const sub = await fetchJSON(`/diagnose-oom?dumpDir=${enc(State.dumpDir)}`);
+    return pollTask(sub.taskId);
+  },
+  async connectionPools() {
+    if (!State.live) return MOCK.connectionPools();
+    return fetchJSON(`/connection-pools?dumpDir=${enc(State.dumpDir)}`);
+  },
+  async poolLeaks() {
+    if (!State.live) return MOCK.poolLeaks();
+    return fetchJSON(`/pool-leaks?dumpDir=${enc(State.dumpDir)}`);
+  }
+};
+function enc(s){ return encodeURIComponent(s); }
+async function fetchJSON(path, method='GET', body=null){
+  const r = await fetch(State.base + path, {method, headers:{'Content-Type':'application/json'}, body});
+  if (!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+/* 异步任务轮询：提交后拿 taskId → 轮询 /tasks/{id} 直到 DONE/ERROR，返回 result。 */
+async function pollTask(taskId, intervalMs=1000, maxTries=600){
+  for(let i=0;i<maxTries;i++){
+    const t = await fetchJSON(`/tasks/${enc(taskId)}`);
+    if(t.status==='DONE'){
+      if(t.resultEvicted) throw new Error('结果已被回收（软引用），请重新发起诊断');
+      return t.result;
+    }
+    if(t.status==='FAILED'||t.status==='CANCELLED'||t.status==='NOT_FOUND')
+      throw new Error(t.error||('task '+t.status));
+    await sleep(intervalMs);   // RUNNING → 继续轮询
+  }
+  throw new Error('task timeout');
+}
+
+/* ---------- MOCK 数据（数值来自真实 dump 实测） ---------- */
+const MOCK = {
+  overview: { numObjects:6094, numClasses:565, numClassLoaders:3, numGcRoots:530,
+    usedHeapSize:300920, usedHeapSizeHuman:'293.9 KB', jvmInfo:'Java HotSpot 1.8.0_05 (x64)' },
+  overviewFull: { numObjects:6094, numClasses:565, numClassLoaders:3, numGcRoots:530,
+    usedHeapSize:300920, usedHeapSizeHuman:'293.9 KB', jvmInfo:'Java HotSpot(TM) 64-Bit Server VM (1.8.0_05)',
+    identifierSize:8, useCompressedOops:'true', heapFormat:'hprof', creationDate:'2026-06-28 13:00:00',
+    filePath:'/nfs/heapdumps/hd_x/app.hprof', fileLength:'5.1 MB',
+    systemProperties:[
+      {name:'java.version', value:'1.8.0_05'},
+      {name:'java.vm.name', value:'Java HotSpot(TM) 64-Bit Server VM'},
+      {name:'os.name', value:'Linux'},
+      {name:'os.arch', value:'amd64'},
+      {name:'user.timezone', value:'Asia/Shanghai'},
+      {name:'file.encoding', value:'UTF-8'},
+      {name:'user.name', value:'appuser'},
+      {name:'sun.java.command', value:'com.example.App --port 8080'},
+    ]},
+  _hist: [
+    ['char[]',1555,145088,150000,true],['java.lang.String',1533,36792,140200,true],
+    ['byte[]',7,24960,24960,false],['java.lang.Object[]',328,14232,42000,true],
+    ['java.lang.Class',574,7272,9100,false],['java.util.HashMap$Node',420,13440,30000,true],
+    ['java.lang.Integer',300,4800,4800,false],['int[]',45,9200,9200,false],
+    ['java.util.HashMap',88,4224,28000,true],['java.lang.reflect.Method',210,16800,16800,false],
+    ['java.util.concurrent.ConcurrentHashMap$Node',150,4800,9000,true],
+    ['java.lang.ref.SoftReference',60,2400,2400,false],['java.util.ArrayList',95,2280,15000,true],
+    ['com.example.CacheManager',1,48,180000,true],['com.example.Connection',50,1600,52000,true],
+  ],
+  histogram(top, offset, sort, objectSet){
+    // 对结果集做直方图：返回 OQL 那批对象的类聚合（演示分析流复用）
+    if(objectSet){
+      const rows=[
+        {classId:2001,label:'com.example.Connection',count:2,shallowBytes:64,shallow:human(64),retainedBytes:3200,retained:human(3200),retainedApprox:false},
+        {classId:2002,label:'java.lang.String',count:2,shallowBytes:48,shallow:human(48),retainedBytes:132,retained:human(132),retainedApprox:false},
+        {classId:2003,label:'char[]',count:1,shallowBytes:256,shallow:human(256),retainedBytes:256,retained:human(256),retainedApprox:false},
+      ];
+      const key= sort==='count'?'count':(sort==='retained'?'retainedBytes':'shallowBytes');
+      rows.sort((a,b)=>b[key]-a[key]);
+      return {groupBy:'class',sort:sort||'shallow',rows,totalRows:rows.length,returned:rows.length,cursor:null};
+    }
+    let rows = MOCK._hist.map((r,i)=>({classId:1000+i, label:r[0], count:r[1],
+      shallowBytes:r[2], shallow:human(r[2]), retainedBytes:r[3], retained:human(r[3]), retainedApprox:r[4]}));
+    const key = sort==='count'?'count':(sort==='retained'?'retainedBytes':'shallowBytes');
+    rows.sort((a,b)=>b[key]-a[key]);
+    const total=rows.length; const slice=rows.slice(offset, offset+top);
+    return {groupBy:'class', sort, rows:slice, totalRows:total, returned:slice.length,
+      cursor: offset+top<total ? 'offset:'+(offset+top):null};
+  },
+  _domRoot: [
+    [5567,'com.example.CacheManager @ 0x7f3c',180000,48,59.8,true],
+    [88,'Thread "http-nio-8080-exec-7" @ 0x6a1',52000,512,17.3,true],
+    [120,'java.util.HashMap @ 0x6b2',28000,48,9.3,true],
+    [301,'java.lang.Object[] @ 0x6c3',14000,40,4.7,true],
+    [410,'byte[] @ 0x6d4',9000,9000,3.0,false],
+  ],
+  _domChild: {
+    5567:[[5568,'java.util.concurrent.ConcurrentHashMap @ 0x7f40',175000,64,97.2,true],
+          [5569,'com.example.Config @ 0x7f50',3000,120,1.7,false]],
+    5568:[[5570,'CHM$Node[] @ 0x7f60',170000,2048,97.1,true]],
+    88:[[89,'com.example.Connection @ 0x6a2',50000,1600,96.1,true]],
+  },
+  dominator(parent, top, offset){
+    const list = parent==='ROOT' ? MOCK._domRoot : (MOCK._domChild[parent]||[]);
+    const rows = list.map(r=>({objectId:r[0], label:r[1], type:'', retainedBytes:r[2],
+      retained:human(r[2]), shallowBytes:r[3], shallow:human(r[3]), percent:r[4], expandable:r[5]}));
+    return {parent, rows, totalRows:rows.length, returned:rows.length, cursor:null};
+  },
+  threads(){
+    return {rows:[
+      {objectId:88, name:'http-nio-8080-exec-7', daemon:true, priority:5,
+       contextClassLoader:'WebappClassLoader @ 0x55', retainedBytes:52000, retained:human(52000), hasStack:true},
+      {objectId:90, name:'main', daemon:false, priority:5, contextClassLoader:'AppClassLoader',
+       retainedBytes:8000, retained:human(8000), hasStack:true},
+      {objectId:92, name:'Finalizer', daemon:true, priority:8, contextClassLoader:null,
+       retainedBytes:1200, retained:human(1200), hasStack:false},
+    ], totalRows:3};
+  },
+  threadFrames(threadId){
+    const F = {
+      88:[ // http 线程的栈帧（栈顶在上）
+        {frameIdx:0, text:'at com.example.dao.UserDao.query(UserDao.java:42)', localsCount:2, maxLocalRetained:human(50000)},
+        {frameIdx:1, text:'at com.example.service.UserService.getUser(UserService.java:88)', localsCount:1, maxLocalRetained:human(50000)},
+        {frameIdx:2, text:'at com.example.web.RequestHandler.handle(RequestHandler.java:31)', localsCount:3, maxLocalRetained:human(120)},
+        {frameIdx:3, text:'at org.apache.tomcat...Http11Processor.service(Http11Processor.java:374)', localsCount:0, maxLocalRetained:'0 B'},
+      ],
+      90:[ {frameIdx:0, text:'at java.lang.Thread.sleep(Native Method)', localsCount:0, maxLocalRetained:'0 B'},
+           {frameIdx:1, text:'at com.example.Main.main(Main.java:15)', localsCount:1, maxLocalRetained:human(8000)} ],
+    };
+    return {threadId, frames: F[threadId]||[]};
+  },
+  threadLocals(threadId, frameIdx){
+    // 第 0 帧的局部变量（UserDao.query）里藏着未关闭的连接 —— 泄漏归因金矿
+    const L = {
+      '88:0':[ {objectId:5567,label:'com.example.CacheManager @ 0x7f3c',type:'com.example.CacheManager',shallow:'48 B',retained:human(50000),expandable:true},
+               {objectId:6001,label:'com.example.Connection @ 0x6a2 (inUse=true)',type:'com.example.Connection',shallow:'32 B',retained:human(1600),expandable:true} ],
+      '88:1':[ {objectId:7001,label:'String "select * from users..."',type:'char[]',shallow:'120 B',retained:'120 B',expandable:false} ],
+      '88:2':[ {objectId:7100,label:'HttpServletRequest @ 0x6c1',type:'Request',shallow:'64 B',retained:human(120),expandable:true} ],
+      '90:1':[ {objectId:8001,label:'com.example.Config @ 0x901',type:'Config',shallow:'40 B',retained:human(8000),expandable:true} ],
+    };
+    return {threadId, frameIdx, locals: L[threadId+':'+frameIdx]||[]};
+  },
+  object(id){
+    // 类对象（histogram 的 classId 在 1000~1099）：显示类信息 + 静态字段
+    if(id>=1000 && id<1100){
+      return {objectId:id, kind:'class', label:'com.example.CacheManager (class)',
+        type:'java.lang.Class', address:'0x'+id.toString(16),
+        shallow:'8 B', retained:'180.0 KB', gcRoot:true, instances:1, superclass:'java.lang.Object',
+        staticFields:[
+          {name:'INSTANCE', value:'com.example.CacheManager @ 0x7f3c', isRef:true, refId:5567},
+          {name:'DEFAULT_TTL', value:'3600', isRef:false},
+          {name:'logger', value:'org.slf4j.Logger', isRef:true, refId:9500},
+        ],
+        outbound:{items:[{name:'INSTANCE',objectId:5567},{name:'<class>',objectId:2000}],total:2,truncated:false},
+        inbound:{items:[{objectId:5567,label:'CacheManager instance'}],total:1,truncated:false}};
+    }
+    // 基本类型数组示例（id 7001=char[]）
+    // String 对象（id 9001）：直接显示文本内容（演示中文/emoji，Unicode 正确）
+    if(id===9001){
+      return {objectId:id, kind:'instance', label:'java.lang.String @ 0x2329',
+        type:'java.lang.String', address:'0x2329', shallow:'24 B', retained:'72 B', gcRoot:false,
+        value:'用户名：张三 · ユーザー · 🚀 jdbc:mysql://db:3306/app',
+        fields:[
+          {name:'value', type:'ref', value:'"用户名：张三 · ユーザー · 🚀..."', isRef:true, refId:7001},
+          {name:'hash', type:'int', value:'1234567', isRef:false},
+          {name:'coder', type:'byte', value:'1', isRef:false},
+        ],
+        outbound:{items:[{name:'value',objectId:7001}],total:1,truncated:false},
+        inbound:{items:[{objectId:6001,label:'Connection.url'}],total:1,truncated:false}};
+    }
+    if(id===7001){
+      return {objectId:id, kind:'primitiveArray', label:'char[120]', type:'char[]',
+        address:'0x'+id.toString(16), shallow:'256 B', retained:'256 B', gcRoot:false, length:120,
+        elements:{items:["'s'","'e'","'l'","'e'","'c'","'t'","' '","'*'"], total:120, truncated:true},
+        outbound:{items:[],total:0,truncated:false},
+        inbound:{items:[{objectId:6001,label:'String value'}],total:1,truncated:false}};
+    }
+    // 默认：普通实例（Connection），实例字段 + 静态字段 + 出入引用
+    return {objectId:id, kind:'instance', label:'com.example.Connection @ 0x'+id.toString(16),
+      type:'com.example.Connection', address:'0x'+id.toString(16),
+      shallow:'32 B', shallowBytes:32, retained:'1.0 KB', retainedBytes:1024, gcRoot:false,
+      fields:[
+        {name:'url', type:'ref', value:'"用户名：张三的连接 jdbc:mysql://db:3306/app"', isRef:true, refId:9001},
+        {name:'inUse', type:'boolean', value:'true', isRef:false},
+        {name:'timeoutMs', type:'long', value:'30000', isRef:false},
+        {name:'firstChar', type:'char', value:"'用' (29992)", isRef:false},
+        {name:'pool', type:'ref', value:'com.zaxxer.hikari.HikariPool @ 0x7f80', isRef:true, refId:5567},
+      ],
+      staticFields:[
+        {name:'DEFAULT_TIMEOUT', value:'30000', isRef:false},
+        {name:'driver', value:'com.mysql.cj.jdbc.Driver', isRef:true, refId:9600},
+      ],
+      outbound:{items:[
+        {name:'url', objectId:9001},
+        {name:'pool', objectId:5567},
+        {name:'properties', objectId:9002},
+      ], total:3, truncated:false},
+      inbound:{items:[
+        {objectId:6500, label:'PoolEntry @ 0x6500 (state=IN_USE)'},
+        {objectId:88, label:'Thread "http-nio-8080-exec-7" (local var)'},
+      ], total:2, truncated:false}};
+  },
+  oql(q, view, sort){
+    // 模拟一批匹配对象（不同类，便于演示直方图聚合）
+    let objs=[
+      {objectId:6001,label:'Connection @ 0x6a2',type:'com.example.Connection',shallowBytes:32,retainedBytes:1600},
+      {objectId:6002,label:'Connection @ 0x6a3',type:'com.example.Connection',shallowBytes:32,retainedBytes:1600},
+      {objectId:9001,label:'String "用户名：张三..."',type:'java.lang.String',shallowBytes:24,retainedBytes:72},
+      {objectId:9003,label:'String "商品名称"',type:'java.lang.String',shallowBytes:24,retainedBytes:60},
+      {objectId:7001,label:'char[120]',type:'char[]',shallowBytes:256,retainedBytes:256},
+    ];
+    if(view==='histogram'){
+      // 按 type 聚合
+      const m={};
+      objs.forEach(o=>{ const k=o.type; (m[k]=m[k]||{label:k,count:0,shallowBytes:0,retainedBytes:0});
+        m[k].count++; m[k].shallowBytes+=o.shallowBytes; m[k].retainedBytes+=o.retainedBytes; });
+      let rows=Object.values(m).map((r,i)=>({classId:1000+i,label:r.label,count:r.count,
+        shallowBytes:r.shallowBytes,shallow:human(r.shallowBytes),
+        retainedBytes:r.retainedBytes,retained:human(r.retainedBytes),retainedApprox:false}));
+      const key= sort==='count'?'count':(sort==='retained'?'retainedBytes':'shallowBytes');
+      rows.sort((a,b)=>b[key]-a[key]);
+      return {kind:'histogram', resultObjects:objs.length, resultSetId:'rs-mock-1',
+        histogram:{groupBy:'class',sort:sort||'shallow',rows,totalRows:rows.length,returned:rows.length}};
+    }
+    // list 视图（可排序）
+    if(sort){ const key=sort==='retained'?'retainedBytes':'shallowBytes'; objs.sort((a,b)=>b[key]-a[key]); }
+    const rows=objs.map(o=>({...o, shallow:human(o.shallowBytes), retained:human(o.retainedBytes), expandable:false}));
+    return {kind:'objectList', rows, totalRows:rows.length, returned:rows.length, truncated:false, resultSetId:'rs-mock-1'};
+  },
+  retainedSet(rs){ return {retained:'3.4 KB', total:5}; },
+  connectionPools(){
+    return {count:2, pools:[
+      {type:'HikariCP', objectId:5500, label:'HikariDataSource @ 0x5500',
+       config:[
+         {name:'poolName',value:'HikariPool-1'},{name:'maxPoolSize',value:'20'},
+         {name:'minIdle',value:'5'},{name:'connectionTimeout',value:'30000'},
+         {name:'idleTimeout',value:'600000'},{name:'maxLifetime',value:'1800000'},
+         {name:'jdbcUrl',value:'jdbc:mysql://db:3306/app'},{name:'username',value:'appuser'},
+         {name:'password',value:'******'},{name:'leakDetectionThreshold',value:'0'},
+       ],
+       stats:[
+         {name:'total',value:'18'},{name:'waiting',value:'3'},
+         {name:'note',value:'active/idle 见下方连接明细（按 PoolEntry.state 区分）'},
+       ],
+       connections:{
+         idleCount:2, activeCount:3, otherCount:0,
+         idle:[
+           {entryId:6500,connId:6510,state:'NOT_IN_USE',lastBorrowedNanos:'0',lastAccessedNanos:'128400000000'},
+           {entryId:6501,connId:6511,state:'NOT_IN_USE',lastBorrowedNanos:'0',lastAccessedNanos:'128300000000'},
+         ],
+         active:[
+           {entryId:6700,connId:6710,state:'IN_USE',lastBorrowedNanos:'120000000000',lastAccessedNanos:'120000000000'},
+           {entryId:6701,connId:6711,state:'IN_USE',lastBorrowedNanos:'118000000000',lastAccessedNanos:'118000000000'},
+           {entryId:6702,connId:6712,state:'IN_USE',lastBorrowedNanos:'60000000000',lastAccessedNanos:'60000000000'},
+         ],
+         note:'空闲=PoolEntry.state=NOT_IN_USE；活跃=state=IN_USE(借出中)；均取自 pool.connectionBag.sharedList'
+       }},
+      {type:'Druid', objectId:5567, label:'DruidDataSource @ 0x7f3c',
+       config:[
+         {name:'name',value:'masterDS'},{name:'maxActive',value:'50'},
+         {name:'minIdle',value:'10'},{name:'maxWait',value:'30000'},
+         {name:'url',value:'jdbc:mysql://db:3306/app'},{name:'username',value:'appuser'},
+         {name:'password',value:'******'},{name:'validationQuery',value:'SELECT 1'},
+       ],
+       stats:[
+         {name:'active',value:'48'},{name:'idle',value:'2'},{name:'maxActive',value:'50'},
+       ],
+       connections:{
+         idleCount:2,
+         idle:[
+           {holderId:7001,connId:7101,useCount:'1532',connectTimeMillis:'1718000000000'},
+           {holderId:7002,connId:7102,useCount:'980',connectTimeMillis:'1718000005000'},
+         ],
+         active:[
+           {connId:6001,connectedTimeMillis:'1718000300000',hasBorrowStack:true},
+           {connId:6002,connectedTimeMillis:'1718000900000',hasBorrowStack:true},
+         ],
+         note:'空闲=connections[0..poolingCount](holder)；活跃=activeConnections(pooledConnection)'
+       }},
+    ]};
+  },
+  poolLeaks(){
+    return {borrowedTotal:3, suspectedLeaks:2, thresholdMs:300000,
+      connections:[
+        {pool:'Druid', connectionId:6001, label:'DruidPooledConnection @ 0x6a2',
+         borrowedAge:'47m12s', suspectedLeak:true,
+         borrowStack:['at c.e.OrderDao.listAll(OrderDao.java:42)',
+                      'at c.e.OrderService.export(OrderService.java:88)',
+                      'at c.e.web.OrderController.export(OrderController.java:31)']},
+        {pool:'Druid', connectionId:6002, label:'DruidPooledConnection @ 0x6a3',
+         borrowedAge:'31m05s', suspectedLeak:true,
+         borrowStack:['at c.e.ReportDao.bigQuery(ReportDao.java:120)']},
+        {pool:'HikariCP', connectionId:6700, label:'PoolEntry @ 0x6700',
+         borrowedAge:'8s', suspectedLeak:false,
+         borrowStackHint:'无借出栈（Hikari 需开 leakDetectionThreshold）'},
+      ]};
+  },
+  oomDiagnosis(){
+    return {totalHeap:'512.0 MB', triggerThreadCount:1, verdict:'culprit',
+      triggerThreads:[
+        {threadId:88, threadName:'http-nio-8080-exec-7', retained:'248.0 MB', percentHeap:48.4,
+         verdict:'culprit', triggerFrame:'at java.util.Arrays.copyOf(Arrays.java:3236)',
+         reason:'栈顶在内存分配帧；retained 占总堆 48.4%'},
+      ]};
+  },
+  diagnoseOom(){
+    return {
+      summary:{
+        verdict:'sql_oom', confidence:'high',
+        headline:'疑似 SQL 触发 OOM：发现 1 条高风险/未知风险 SQL；触发线程 http-nio-8080-exec-7 持有 248.0 MB（占堆 48.4%）。大结果集（SELECT */无分页）是常见炸点。',
+        recommendation:'先看 sections.sqlInThreads 里 risk=risky 的 SQL 与对应线程 retained；对 SELECT */无分页加分页或 WHERE，再用 path2gc 确认结果集持有链。',
+        oomVerdict:'culprit', triggerThreadCount:1, riskySqlCount:1, sqlTotal:2
+      },
+      sections:{
+        oomDiagnosis: this.oomDiagnosis(),
+        sqlInThreads: this.sqlInThreads(true),
+        leakSuspects: {conclusion:'1 个嫌疑：http-nio-8080-exec-7 线程局部持有大 Object[]（约 248 MB）。', suspects:[
+          {label:'http-nio-8080-exec-7', retained:'248.0 MB', percentHeap:48.4, accumulationPoint:'Object[] ← ArrayList ← 查询结果集'}
+        ]}
+      },
+      note:'复合诊断：OOM触发线程 + SQL风险 + Leak Suspects。各 section 为对应单工具原始输出。'
+    };
+  },
+  sqlInThreads(onlyRisky){
+    const all=[
+      {threadId:88,threadName:'http-nio-8080-exec-7',threadRetained:'248.0 MB',
+       frame:'at c.e.OrderDao.listAll(OrderDao.java:42)',
+       source:'MySQL ClientPreparedStatement',objectId:6001,
+       sql:'SELECT * FROM orders',risk:'risky',reason:'SELECT *，无 WHERE，无分页 → 疑似大结果集'},
+      {threadId:91,threadName:'http-nio-8080-exec-9',threadRetained:'3.2 MB',
+       frame:'at c.e.UserDao.find(UserDao.java:88)',
+       source:'MyBatis BoundSql',objectId:6010,
+       sql:'SELECT id,name FROM users WHERE id=?',risk:'unknown',reason:'查询语句（有 WHERE，风险待评估）'},
+      {threadId:30,threadName:'HikariPool-1 housekeeper',threadRetained:'12 KB',
+       frame:'at ...isConnectionAlive',
+       source:'MySQL ClientPreparedStatement',objectId:6020,
+       sql:'select 1 from dual',risk:'harmless',reason:'心跳/连接校验查询，不会 OOM'},
+    ];
+    const items = onlyRisky ? all.filter(x=>x.risk!=='harmless') : all;
+    return {total:all.length, risky:all.filter(x=>x.risk==='risky').length, items};
+  },
+  threadlocals(groupBy){
+    if(groupBy==='thread'){
+      return {groupBy:'thread', totalThreadLocals:5, threads:[
+        {threadId:88, threadName:'http-nio-8080-exec-7', count:3, totalRetained:'182.0 KB',
+         values:[
+           {objectId:5567,label:'com.example.CacheManager @ 0x7f3c',type:'com.example.CacheManager',retained:'175.8 KB'},
+           {objectId:6700,label:'com.example.UserContext @ 0x6700 (用户：张三)',type:'com.example.UserContext',retained:'4.2 KB'},
+           {objectId:6701,label:'SimpleDateFormat @ 0x6701',type:'java.text.SimpleDateFormat',retained:'2.0 KB'},
+         ]},
+        {threadId:90, threadName:'main', count:1, totalRetained:'1.0 KB',
+         values:[{objectId:6800,label:'ThreadLocalRandom',type:'...',retained:'1.0 KB'}]},
+      ]};
+    }
+    return {groupBy:'valueClass', totalThreadLocals:5, totalClasses:4, returned:4, rows:[
+      {valueClass:'com.example.CacheManager', count:1, retained:'175.8 KB', sampleObjectId:5567},
+      {valueClass:'com.example.UserContext',  count:12, retained:'50.4 KB', sampleObjectId:6700},
+      {valueClass:'java.text.SimpleDateFormat', count:8, retained:'16.0 KB', sampleObjectId:6701},
+      {valueClass:'java.lang.Long', count:30, retained:'480 B', sampleObjectId:6900},
+    ]};
+  }
+};
+function human(b){ if(b<1024)return b+' B'; const u=['KB','MB','GB']; let v=b,i=-1;
+  do{v/=1024;i++}while(v>=1024&&i<u.length-1); return v.toFixed(1)+' '+u[i]; }
+
+/* ---------- Tab 管理 ---------- */
+function openView(type, params={}, title=null){
+  const id = type+':'+JSON.stringify(params);
+  let tab = State.tabs.find(t=>t.id===id);
+  if (!tab){ tab={id, type, params, title: title||defaultTitle(type,params)}; State.tabs.push(tab); }
+  State.activeTab = id; renderTabs(); renderView();
+}
+function closeTab(id, ev){ ev.stopPropagation();
+  const i=State.tabs.findIndex(t=>t.id===id); if(i<0)return;
+  State.tabs.splice(i,1);
+  if(State.activeTab===id) State.activeTab = State.tabs.length? State.tabs[Math.max(0,i-1)].id : null;
+  renderTabs(); renderView();
+}
+function defaultTitle(type, p){
+  if(type==='sql') return 'SQL in Threads';
+  if(type==='pools') return 'Connection Pools';
+  const m={overview:'Overview',histogram:'Histogram',dominator:'Dominator Tree',
+    threads:'Threads',threadlocals:'ThreadLocals',leak:'Leak Suspects',oql:'OQL',
+    diagnoseOom:'OOM 复合诊断'};
+  if(type==='path2gc') return 'Path→GC #'+p.objectId;
+  if(type==='outbound') return 'Outbound #'+p.objectId;
+  if(type==='threadlocals') return 'ThreadLocals'+(p.groupBy==='thread'?' (按线程)':'');
+  if(type==='histogramOfSet') return 'Histogram of set';
+  if(type==='histogramOfRS') return 'Histogram of '+(p.rs||'set');
+  return m[type]||type;
+}
+function renderTabs(){
+  const el=document.getElementById('tabs'); el.innerHTML='';
+  State.tabs.forEach(t=>{
+    const d=document.createElement('div'); d.className='tab'+(t.id===State.activeTab?' active':'');
+    d.innerHTML=`<span>${esc(t.title)}</span><span class="x">✕</span>`;
+    d.onclick=()=>{State.activeTab=t.id; renderTabs(); renderView();};
+    d.querySelector('.x').onclick=(e)=>closeTab(t.id,e);
+    el.appendChild(d);
+  });
+}
+
+/* ---------- 视图渲染 ---------- */
+async function renderView(){
+  const host=document.getElementById('view');
+  const tab=State.tabs.find(t=>t.id===State.activeTab);
+  if(!tab){ host.innerHTML='<div class="note">左侧选择一个视图开始分析。</div>'; return; }
+  host.innerHTML='<div class="loading">加载中…</div>';
+  try{
+    if(tab.type==='overview') return renderOverview(host);
+    if(tab.type==='histogram') return renderHistogram(host, tab);
+    if(tab.type==='dominator') return renderDominator(host, tab);
+    if(tab.type==='threads') return renderThreads(host, tab);
+    if(tab.type==='threadlocals') return renderThreadLocals(host, tab);
+    if(tab.type==='diagnoseOom') return renderDiagnoseOom(host);
+    if(tab.type==='leak') return renderLeak(host);
+    if(tab.type==='sql') return renderSql(host, tab);
+    if(tab.type==='pools') return renderPools(host, tab);
+    if(tab.type==='oql') return renderOql(host);
+    if(tab.type==='path2gc') return renderPath2gc(host, tab);
+    if(tab.type==='histogramOfSet') return renderHistogram(host, tab);
+    if(tab.type==='histogramOfRS') return renderHistogramOfRS(host, tab);
+    host.innerHTML='<div class="note">视图 '+tab.type+' 原型未实现（真实后端有对应端点）。</div>';
+  }catch(e){ host.innerHTML='<div class="note" style="color:var(--err)">出错：'+esc(e.message)+
+    '<br>（MOCK 模式下应不会出错；真实模式请检查后端连通与 dumpDir）</div>'; }
+}
+
+async function renderOverview(host){
+  const o=await API.overview();
+  // OOM 诊断横幅（最先想看的"谁的锅"）
+  let oomBanner='';
+  try{
+    const d=await API.oomDiagnosis();
+    if(d.triggerThreadCount>0){
+      const t=d.triggerThreads[0];
+      const isCulprit=t.verdict==='culprit';
+      oomBanner=`<div class="oombanner ${isCulprit?'culprit':'victim'}">
+        <b>${isCulprit?'🔴 疑似 OOM 元凶':'🟡 触发线程是受害者'}</b> —
+        线程 <code>${esc(t.threadName)}</code>（retained ${esc(t.retained)} / ${t.percentHeap}% 堆）<br>
+        <span style="color:var(--muted)">${esc(t.reason)} · ${esc(t.triggerFrame||'')}</span>
+        ${!isCulprit&&d.culpritHint?`<br>真正大头：<code>${esc(d.culpritHint.threadName)}</code> ${esc(d.culpritHint.retained)} (${d.culpritHint.percentHeap}%)`:''}
+        <button data-open="sql" style="margin-left:8px;background:var(--panel2);color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer">查看该线程的 SQL →</button>
+      </div>`;
+    }
+  }catch(e){}
+  // heap dump 内部信息 kv
+  const info=[
+    ['JVM', o.jvmInfo],['堆格式', o.heapFormat],['标识符大小', o.identifierSize?o.identifierSize+' 字节':null],
+    ['压缩指针', o.useCompressedOops],['创建时间', o.creationDate],
+    ['文件', o.filePath],['文件大小', o.fileLength],['快照标识', o.snapshotIdentifier],
+  ].filter(r=>r[1]!=null&&r[1]!=='');
+  const sp=o.systemProperties||[];
+  host.innerHTML=oomBanner+`<div class="cards">
+    ${card(o.numObjects.toLocaleString(),'对象数')}
+    ${card(o.numClasses,'类数')}
+    ${card(o.numClassLoaders,'类加载器')}
+    ${card(o.numGcRoots,'GC Roots')}
+    ${card(o.usedHeapSizeHuman||human(o.usedHeapSize),'堆大小')}
+    </div>
+    <div style="padding:0 16px 8px">
+      快速入口：${qbtn('histogram','📈 Histogram')} ${qbtn('dominator','🌲 Dominator')}
+      ${qbtn('leak','🩺 Leak Suspects')} ${qbtn('threadlocals','🧷 ThreadLocals')}
+    </div>
+    <h3 style="margin:8px 16px;color:var(--accent2)">Heap Dump Info</h3>
+    <div class="kv" style="margin:0 16px 12px">
+      ${info.map(r=>`<div class="k">${esc(r[0])}</div><div class="v">${esc(String(r[1]))}</div>`).join('')}
+    </div>
+    <h3 style="margin:8px 16px;color:var(--accent2)">System Properties (${sp.length})</h3>
+    <input id="spSearch" class="field-search" style="margin:0 16px;width:calc(100% - 32px)" placeholder="🔎 搜索属性…">
+    <div class="ftbl" id="spTbl" style="margin:6px 16px">
+      <div class="fhead"><div class="fc name" style="width:200px">Name</div><div class="fc val">Value</div></div>
+      <div class="fbody"></div>
+    </div>`;
+  host.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openView(b.dataset.open));
+  // System Properties 搜索
+  const body=host.querySelector('#spTbl .fbody');
+  const renderSP=(f)=>{ let rows=sp;
+    if(f) rows=sp.filter(p=>p.name.toLowerCase().includes(f)||String(p.value).toLowerCase().includes(f));
+    body.innerHTML=rows.length?rows.map(p=>`<div class="frow">
+      <div class="fc name" style="width:200px">${esc(p.name)}</div>
+      <div class="fc val">${esc(String(p.value))}</div></div>`).join('')
+      :'<div class="frow"><div class="fc" style="color:var(--muted)">无匹配</div></div>'; };
+  renderSP('');
+  host.querySelector('#spSearch').oninput=(e)=>renderSP(e.target.value.trim().toLowerCase());
+}
+function card(n,l){ return `<div class="card"><div class="num">${n}</div><div class="lbl">${l}</div></div>`; }
+function qbtn(v,t){ return `<button data-open="${v}" style="background:var(--panel);color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;margin-right:6px">${t}</button>`; }
+
+/* Histogram：虚拟滚动表 */
+async function renderHistogram(host, tab){
+  const sort = tab.params.sort || 'shallow';
+  const data = await API.histogram(200,0,sort);
+  const maxShallow = Math.max(...data.rows.map(r=>r.shallowBytes),1);
+  host.innerHTML=`
+    <div class="ghead">
+      <div class="gc name">Class</div>
+      <div class="gc num" style="width:90px" data-sort="count">Objects</div>
+      <div class="gc num" style="width:130px" data-sort="shallow">Shallow ▾</div>
+      <div class="gc num" style="width:130px" data-sort="retained">Retained</div>
+    </div>
+    <div id="rows"></div>
+    <div class="note">共 ${data.totalRows} 个类（含无实例的 0 值类，属正常）。点列头切换排序。右键行有联动菜单。</div>`;
+  const rowsEl=host.querySelector('#rows');
+  data.rows.forEach(r=>{
+    const div=document.createElement('div'); div.className='grow';
+    const w = Math.round(r.shallowBytes/maxShallow*100);
+    div.innerHTML=`<div class="gc name">${esc(r.label)}
+        <div class="bar"><i style="width:${w}%"></i></div></div>
+      <div class="gc num" style="width:90px">${r.count.toLocaleString()}</div>
+      <div class="gc num" style="width:130px">${r.shallow}</div>
+      <div class="gc num" style="width:130px">${r.retained}${r.retainedApprox?' <span class="approx">≈</span>':''}</div>`;
+    div.onclick=()=>selectObj({objectId:r.classId, label:r.label, type:'class',
+      shallow:r.shallow, retained:r.retained, isClass:true}, div);
+    div.oncontextmenu=(e)=>rowMenu(e, {objectId:r.classId, label:r.label, isClass:true});
+    rowsEl.appendChild(div);
+  });
+  host.querySelectorAll('[data-sort]').forEach(h=>h.onclick=()=>openView('histogram',{sort:h.dataset.sort}));
+}
+
+/* 对结果集(resultSetId)做直方图 —— 分析流复用 */
+async function renderHistogramOfRS(host, tab){
+  const data=await API.histogram(200,0,'shallow', tab.params.rs);
+  const max=Math.max(...data.rows.map(r=>r.shallowBytes),1);
+  let html=`<div class="note">对结果集 <code>${esc(tab.params.rs)}</code> 按类聚合（${data.totalRows} 类）</div>
+    <div class="ghead"><div class="gc name">Class</div>
+      <div class="gc num" style="width:90px">Objects</div>
+      <div class="gc num" style="width:130px">Shallow</div>
+      <div class="gc num" style="width:130px">Retained</div></div>`;
+  data.rows.forEach(r=>{ const w=Math.round(r.shallowBytes/max*100);
+    html+=`<div class="grow"><div class="gc name">${esc(r.label)}<div class="bar"><i style="width:${w}%"></i></div></div>
+      <div class="gc num" style="width:90px">${r.count}</div>
+      <div class="gc num" style="width:130px">${r.shallow}</div>
+      <div class="gc num" style="width:130px">${r.retained}${r.retainedApprox?' <span class="approx">≈</span>':''}</div></div>`;});
+  host.innerHTML=html;
+}
+
+/* Dominator：懒加载树 */
+async function renderDominator(host, tab){
+  host.innerHTML=`<div class="ghead"><div class="gc name">Object (dominator tree)</div>
+    <div class="gc num" style="width:120px">Retained</div>
+    <div class="gc num" style="width:90px">% Heap</div></div>
+    <div id="tree"></div>
+    <div class="note">点 ▸ 展开下一层（懒加载，每次只取一层）。% 条 = retained 占总堆。</div>`;
+  const treeEl=host.querySelector('#tree');
+  await addDomLevel(treeEl, 'ROOT', 0);
+}
+async function addDomLevel(container, parent, depth){
+  const data=await API.dominator(parent,100,0);
+  data.rows.forEach(r=>{
+    const row=document.createElement('div'); row.className='grow';
+    row.style.paddingLeft=(depth*16)+'px';
+    const tw = r.expandable? '▸':'·';
+    row.innerHTML=`<div class="gc name"><span class="twig" data-tw>${tw}</span>${esc(r.label)}
+        <div class="bar"><i style="width:${Math.min(100,r.percent)}%"></i></div></div>
+      <div class="gc num" style="width:120px">${r.retained}</div>
+      <div class="gc num" style="width:90px">${r.percent}%</div>`;
+    let expanded=false, childWrap=null;
+    const tws=row.querySelector('[data-tw]');
+    row.onclick=()=>selectObj(r, row);
+    if(r.expandable){
+      tws.style.cursor='pointer';
+      tws.onclick=async(e)=>{ e.stopPropagation();
+        if(!expanded){ childWrap=document.createElement('div');
+          row.after(childWrap); tws.textContent='▾';
+          await addDomLevel(childWrap, r.objectId, depth+1); expanded=true; }
+        else { childWrap.remove(); childWrap=null; tws.textContent='▸'; expanded=false; }
+      };
+    }
+    row.oncontextmenu=(e)=>rowMenu(e, r);
+    container.appendChild(row);
+  });
+}
+
+/* Threads：三级树（简化为两级演示：线程→栈帧/局部变量提示） */
+async function renderThreads(host, tab){
+  const data=await API.threads();
+  host.innerHTML=`<div class="ghead"><div class="gc name">Thread / Frame / Local</div>
+    <div class="gc num" style="width:120px">Retained</div></div><div id="tl"></div>
+    <div class="note">点 ▸ 逐层展开：线程 → 栈帧 → 栈帧局部变量。
+    局部变量里持有的连接/大对象 = 泄漏归因金矿（看 http 线程第 0 帧）。</div>`;
+  const tl=host.querySelector('#tl');
+  data.rows.forEach(t=>{
+    // 一级：线程
+    const row=mkRow(0, t.hasStack?'▸':'·',
+      `${esc(t.name)} ${t.daemon?'<span class="pill">daemon</span>':''}<span class="pill">prio ${t.priority}</span>`,
+      t.retained);
+    row.onclick=()=>selectObj({objectId:t.objectId, label:t.name, type:'java.lang.Thread', retained:t.retained}, row);
+    row.oncontextmenu=(e)=>rowMenu(e,{objectId:t.objectId,label:t.name});
+    let expanded=false, wrap=null;
+    if(t.hasStack){
+      const tw=row.querySelector('[data-tw]'); tw.style.cursor='pointer';
+      tw.onclick=async(e)=>{ e.stopPropagation();
+        if(!expanded){ wrap=document.createElement('div'); row.after(wrap); tw.textContent='▾';
+          await addFrames(wrap, t.objectId); expanded=true; }
+        else { wrap.remove(); wrap=null; tw.textContent='▸'; expanded=false; } };
+    }
+    tl.appendChild(row);
+  });
+}
+// 二级：栈帧
+async function addFrames(container, threadId){
+  const data=await API.threadFrames(threadId);
+  if(!data.frames.length){ container.appendChild(mkRow(1,'·','<span style="color:var(--muted)">（无栈帧信息）</span>','')); return; }
+  data.frames.forEach(f=>{
+    const hasLocals = f.localsCount>0;
+    const row=mkRow(1, hasLocals?'▸':'·',
+      `<span style="font-family:var(--mono);font-size:12px">${esc(f.text)}</span>`+
+      (hasLocals?`<span class="pill">${f.localsCount} locals</span>`:''),
+      f.maxLocalRetained||'');
+    let expanded=false, wrap=null;
+    if(hasLocals){
+      const tw=row.querySelector('[data-tw]'); tw.style.cursor='pointer';
+      tw.onclick=async(e)=>{ e.stopPropagation();
+        if(!expanded){ wrap=document.createElement('div'); row.after(wrap); tw.textContent='▾';
+          await addLocals(wrap, threadId, f.frameIdx); expanded=true; }
+        else { wrap.remove(); wrap=null; tw.textContent='▸'; expanded=false; } };
+    }
+    container.appendChild(row);
+  });
+}
+// 三级：局部变量（对象）
+async function addLocals(container, threadId, frameIdx){
+  const data=await API.threadLocals(threadId, frameIdx);
+  if(!data.locals.length){ container.appendChild(mkRow(2,'·','<span style="color:var(--muted)">（无局部变量）</span>','')); return; }
+  data.locals.forEach(o=>{
+    const row=mkRow(2,'◆', esc(o.label), o.retained);
+    row.onclick=()=>selectObj(o, row);
+    row.oncontextmenu=(e)=>rowMenu(e, o);   // 右键可 Path to GC roots —— 泄漏归因
+    container.appendChild(row);
+  });
+}
+// 通用行构造（缩进 + 展开标记 + retained 列）
+function mkRow(depth, twig, nameHtml, retained){
+  const row=document.createElement('div'); row.className='grow';
+  row.style.paddingLeft=(depth*16)+'px';
+  row.innerHTML=`<div class="gc name"><span class="twig" data-tw>${twig}</span>${nameHtml}</div>
+    <div class="gc num" style="width:120px">${retained||''}</div>`;
+  return row;
+}
+
+/* ThreadLocals 全局视图（泄漏排查）：按值类聚合（默认）或按线程 */
+async function renderThreadLocals(host, tab){
+  const groupBy = tab.params.groupBy || 'valueClass';
+  const data = await API.threadlocals(groupBy);
+  const toggle = `<div style="padding:8px 12px;display:flex;gap:8px;align-items:center">
+      <span style="color:var(--muted)">聚合</span>
+      <select id="tlGroup" style="background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px">
+        <option value="valueClass"${groupBy==='valueClass'?' selected':''}>按值类（找泄漏）</option>
+        <option value="thread"${groupBy==='thread'?' selected':''}>按线程</option>
+      </select>
+      <span style="color:var(--muted)">共 ${data.totalThreadLocals} 个 ThreadLocal 值</span>
+    </div>`;
+
+  if(groupBy==='valueClass'){
+    const max=Math.max(...data.rows.map(r=>parseBytes(r.retained)),1);
+    let html=toggle+`<div class="note">按 ThreadLocal 值的类聚合，retained 降序。
+      <b>count 大 + 业务类</b> = 泄漏嫌疑（线程池复用线程残留 ThreadLocal）。</div>
+      <div class="ghead"><div class="gc name">Value Class</div>
+        <div class="gc num" style="width:80px">Count</div>
+        <div class="gc num" style="width:130px">Retained</div></div>`;
+    data.rows.forEach(r=>{ const w=Math.round(parseBytes(r.retained)/max*100);
+      html+=`<div class="grow" data-oid="${r.sampleObjectId}"><div class="gc name">${esc(r.valueClass)}
+          <div class="bar"><i style="width:${w}%"></i></div></div>
+        <div class="gc num" style="width:80px">${r.count}</div>
+        <div class="gc num" style="width:130px">${r.retained}</div></div>`;});
+    host.innerHTML=html;
+    host.querySelectorAll('.grow[data-oid]').forEach(row=>{
+      row.onclick=()=>selectObj({objectId:parseInt(row.dataset.oid), label:row.querySelector('.gc.name').textContent.trim()}, row);
+      row.oncontextmenu=(e)=>rowMenu(e,{objectId:parseInt(row.dataset.oid)});
+    });
+  } else {
+    let html=toggle+`<div class="note">每个线程持有的 ThreadLocal 值。线程池线程残留大对象 = 泄漏。</div>
+      <div class="ghead"><div class="gc name">Thread / ThreadLocal value</div>
+        <div class="gc num" style="width:130px">Retained</div></div><div id="tlt"></div>`;
+    host.innerHTML=html;
+    const tlt=host.querySelector('#tlt');
+    data.threads.forEach(t=>{
+      const row=mkRow(0,'▸',`${esc(t.threadName)} <span class="pill">${t.count} TL</span>`, t.totalRetained);
+      let expanded=false, wrap=null;
+      const tw=row.querySelector('[data-tw]'); tw.style.cursor='pointer';
+      tw.onclick=(e)=>{ e.stopPropagation();
+        if(!expanded){ wrap=document.createElement('div'); row.after(wrap); tw.textContent='▾';
+          t.values.forEach(v=>{ const vr=mkRow(1,'◆',esc(v.label),v.retained);
+            vr.onclick=()=>selectObj(v, vr); vr.oncontextmenu=(e2)=>rowMenu(e2,v); wrap.appendChild(vr); });
+          expanded=true; } else { wrap.remove(); tw.textContent='▸'; expanded=false; } };
+      tlt.appendChild(row);
+    });
+  }
+  // 切聚合：原地更新当前 Tab 的 params 重渲染（不新开 Tab）
+  host.querySelector('#tlGroup').onchange=(e)=>{ tab.params.groupBy=e.target.value; renderView(); };
+}
+/* 简易 "523.4 KB" → 字节，用于画占比条 */
+function parseBytes(s){ if(!s) return 0; const m=/([\d.]+)\s*(B|KB|MB|GB)/.exec(s); if(!m) return 0;
+  const u={B:1,KB:1024,MB:1048576,GB:1073741824}; return parseFloat(m[1])*u[m[2]]; }
+
+/* SQL in Threads（SQL 引起的 OOM 排查）：从线程栈帧局部变量提取 SQL，按风险标记 */
+/* Connection Pools：连接池配置 + 统计 + 泄漏归因（密码已脱敏，识别主流池） */
+async function renderPools(host, tab){
+  const data = await API.connectionPools();
+  if(!data.count){ host.innerHTML='<div class="note">未发现已知连接池（HikariCP/Druid/Tomcat JDBC/DBCP2/c3p0）。</div>'; return; }
+  let html=`<div class="note">发现 ${data.count} 个连接池。密码等敏感字段已脱敏为 ******。</div>`;
+  data.pools.forEach(p=>{
+    const kvTable=(title,list)=> list&&list.length? `<h4 style="margin:8px 0 4px;color:var(--muted)">${title}</h4>
+      <div class="kv">${list.map(r=>`<div class="k">${esc(r.name)}</div>
+        <div class="v">${r.value==='******'?'<span style="color:var(--warn)">••••••</span>':esc(String(r.value))}</div>`).join('')}</div>`:'';
+    // 空闲/活跃连接区分（Druid: holder/pooledConnection；HikariCP: PoolEntry.state）
+    const connMeta=(x)=>{
+      const parts=[];
+      if(x.useCount!=null) parts.push('useCount '+esc(String(x.useCount)));
+      if(x.state) parts.push(esc(String(x.state)));
+      if(x.hasBorrowStack) parts.push('有借出栈');
+      return parts.length? ' · '+parts.join(' · '):'';
+    };
+    const connTable=(c)=> !c ? '' : `
+      <h4 style="margin:8px 0 4px;color:var(--muted)">空闲连接 Idle (${c.idleCount!=null?c.idleCount:(c.idle?c.idle.length:0)})</h4>
+      ${(c.idle&&c.idle.length)? c.idle.map(x=>`<div class="connrow idle" data-cid="${x.connId}">
+          🟢 conn #${x.connId}${connMeta(x)}</div>`).join('') : '<div class="note">无</div>'}
+      <h4 style="margin:8px 0 4px;color:var(--muted)">活跃连接 Active (${c.activeCount!=null?c.activeCount:(c.active?c.active.length:0)})</h4>
+      ${(c.active&&c.active.length)? c.active.map(x=>`<div class="connrow active" data-cid="${x.connId}">
+          🔵 conn #${x.connId}${connMeta(x)}</div>`).join('') : '<div class="note">无</div>'}
+      ${c.note?`<div class="leakmeta" style="margin-top:6px">${esc(c.note)}</div>`:''}`;
+    html+=`<div class="poolcard">
+      <div class="poolhead"><span class="pill" style="color:var(--accent)">${esc(p.type)}</span>
+        <b>${esc(p.label)}</b>
+        <button data-oid="${p.objectId}" class="poolinspect">Inspect →</button></div>
+      ${kvTable('配置 Config', p.config)}
+      ${kvTable('统计 Stats', p.stats)}
+      ${connTable(p.connections)}
+    </div>`;
+  });
+  // 泄漏归因区
+  html += `<h3 style="margin:16px 16px 4px;color:var(--accent2)">🔍 泄漏归因（借出未归还的连接）</h3>
+    <div id="leakbox" class="note">检测中…</div>`;
+  host.innerHTML=html;
+  host.querySelectorAll('.poolinspect').forEach(b=>b.onclick=()=>selectObj({objectId:parseInt(b.dataset.oid),label:'pool'}));
+  host.querySelectorAll('.connrow[data-cid]').forEach(r=>{
+    r.onclick=()=>selectObj({objectId:parseInt(r.dataset.cid),label:'connection'}, r);
+    r.oncontextmenu=(e)=>rowMenu(e,{objectId:parseInt(r.dataset.cid)});
+  });
+
+  // 异步加载泄漏归因
+  try{
+    const lk = await API.poolLeaks();
+    const box = host.querySelector('#leakbox'); box.className='';
+    if(!lk.connections || !lk.connections.length){ box.className='note'; box.innerHTML='无借出中的连接。'; return; }
+    let lh=`<div class="note">借出中 ${lk.borrowedTotal} 个连接，<b style="color:var(--err)">${lk.suspectedLeaks} 个疑似泄漏</b>（借出超 ${Math.round(lk.thresholdMs/60000)} 分钟）。按借出时长降序。</div>`;
+    lk.connections.forEach(c=>{
+      const leak=c.suspectedLeak;
+      lh+=`<div class="leakcard ${leak?'leak':''}" data-cid="${c.connectionId}">
+        <div class="leakhead">${leak?'<span class="pill" style="color:var(--err)">⚠ 疑似泄漏</span>':'<span class="pill">借出中</span>'}
+          <span class="pill">${esc(c.pool)}</span>
+          <span style="color:var(--muted)">借出 ${esc(c.borrowedAge)}</span>
+          <span style="color:var(--muted);font-family:var(--mono)">${esc(c.label)}</span></div>
+        ${c.borrowStack&&c.borrowStack.length?`<div class="leakstack">借出栈（泄漏点）：<br>${c.borrowStack.map(f=>esc(f)).join('<br>')}</div>`
+          :`<div class="leakmeta">${esc(c.borrowStackHint||'')} · 用 Path to GC Roots 看谁持有它</div>`}
+      </div>`;
+    });
+    box.innerHTML=lh;
+    box.querySelectorAll('.leakcard[data-cid]').forEach(card=>{
+      card.onclick=()=>selectObj({objectId:parseInt(card.dataset.cid),label:'connection'}, card);
+      card.oncontextmenu=(e)=>rowMenu(e,{objectId:parseInt(card.dataset.cid)});
+    });
+  }catch(e){ const box=host.querySelector('#leakbox'); box.className='note'; box.innerHTML='泄漏归因加载失败：'+esc(e.message); }
+}
+
+async function renderSql(host, tab){
+  const onlyRisky = tab.params.onlyRisky !== false;
+  const data = await API.sqlInThreads(onlyRisky);
+  const badge = (r)=>{
+    const m={risky:['⚠ 高风险','var(--err)'],unknown:['? 待评估','var(--warn)'],harmless:['✓ 无害','var(--muted)']};
+    const [t,c]=m[r]||m.unknown; return `<span class="pill" style="color:${c}">${t}</span>`;
+  };
+  let html=`<div style="padding:8px 12px;display:flex;gap:10px;align-items:center">
+      <label style="color:var(--muted)"><input type="checkbox" id="riskyOnly" ${onlyRisky?'checked':''}> 只看有风险</label>
+      <span style="color:var(--muted)">共 ${data.total} 条 SQL，${data.risky} 条高风险</span>
+    </div>
+    <div class="note">从各线程栈帧局部变量提取正在执行的 SQL。
+    <b>高风险</b>=SELECT */无WHERE/无分页 → 疑似大结果集导致 OOM；心跳类(select 1 from dual)已过滤。</div>
+    <div id="sqllist"></div>`;
+  host.innerHTML=html;
+  const list=host.querySelector('#sqllist');
+  data.items.forEach(it=>{
+    const div=document.createElement('div'); div.className='sqlcard';
+    // 高风险 + 线程 retained 大 = OOM 元凶强证据，徽标醒目
+    const big = it.risk==='risky' && parseBytes(it.threadRetained) > 50*1048576; // >50MB
+    div.innerHTML=`<div class="sqlhead">${badge(it.risk)}
+        <span class="sqlthread">🧵 ${esc(it.threadName)}</span>
+        <span class="tret ${big?'big':''}">retained ${esc(it.threadRetained||'-')}</span>
+        <span class="sqlsrc">${esc(it.source)}</span></div>
+      <pre class="sqltext">${esc(it.sql)}</pre>
+      <div class="sqlmeta">${big?'<b style="color:var(--err)">⚠ 该线程 retained 很大 + 高风险 SQL → 疑似 OOM 元凶</b> · ':''}${esc(it.reason)} · <span class="sqlframe">${esc(it.frame)}</span></div>`;
+    div.onclick=()=>selectObj({objectId:it.objectId, label:it.source}, div);
+    div.oncontextmenu=(e)=>rowMenu(e,{objectId:it.objectId});
+    list.appendChild(div);
+  });
+  host.querySelector('#riskyOnly').onchange=(e)=>{ tab.params.onlyRisky=e.target.checked; renderView(); };
+}
+
+/* OOM 复合诊断（mat_diagnose_oom）：summary 头条 + 三路 section（OOM诊断/SQL风险/Leak Suspects） */
+async function renderDiagnoseOom(host){
+  host.innerHTML='<div class="loading">运行复合诊断（OOM触发线程 + SQL风险 + Leak Suspects，含 leakhunter 全图分析，真实后端为异步任务）…</div>';
+  let data;
+  try{ data=await API.diagnoseOom(); }
+  catch(e){ host.innerHTML='<div class="note" style="color:var(--err)">诊断失败：'+esc(e.message)+'</div>'; return; }
+  const s=data.summary||{};
+  const verdictColor={sql_oom:'var(--err)',thread_culprit:'var(--err)',leak_suspect:'var(--warn)',victim:'var(--warn)',unclear:'var(--muted)'}[s.verdict]||'var(--muted)';
+  const verdictLabel={sql_oom:'SQL 触发 OOM',thread_culprit:'线程元凶',leak_suspect:'内存泄漏嫌疑',victim:'受害者线程',unclear:'证据不足'}[s.verdict]||s.verdict;
+
+  // 头条结论
+  let html=`<div class="oombanner ${s.verdict==='victim'||s.verdict==='leak_suspect'?'victim':'culprit'}">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+      <span class="pill" style="color:${verdictColor};font-weight:700">🧪 ${esc(verdictLabel)}</span>
+      <span class="pill">置信度 ${esc(s.confidence||'-')}</span>
+      <span style="color:var(--muted)">触发线程 ${s.triggerThreadCount||0} · 高风险SQL ${s.riskySqlCount||0}/${s.sqlTotal||0}</span>
+    </div>
+    <div style="font-size:13px;line-height:1.7">${esc(s.headline||'')}</div>
+    ${s.recommendation?`<div class="leakmeta" style="margin-top:8px;color:var(--accent)">👉 ${esc(s.recommendation)}</div>`:''}
+  </div>`;
+
+  const sec=data.sections||{};
+  // section 1：OOM 触发线程
+  const oom=sec.oomDiagnosis||{};
+  html+=`<h3 style="margin:14px 16px 4px;color:var(--accent2)">① OOM 触发线程（总堆 ${esc(oom.totalHeap||'-')}）</h3>`;
+  if(oom.triggerThreads&&oom.triggerThreads.length){
+    oom.triggerThreads.forEach(t=>{
+      html+=`<div class="leakcard ${t.verdict==='culprit'?'leak':''}" data-tid="${t.threadId}">
+        <div class="leakhead">
+          <span class="pill" style="color:${t.verdict==='culprit'?'var(--err)':'var(--warn)'}">${t.verdict==='culprit'?'元凶':'受害者'}</span>
+          <b>${esc(t.threadName||'')}</b>
+          <span style="color:var(--muted)">retained ${esc(t.retained||'-')}（${t.percentHeap||0}%）</span></div>
+        <div class="leakmeta">${esc(t.reason||'')}<br>触发帧：<code>${esc(t.triggerFrame||'-')}</code></div>
+      </div>`;
+    });
+  } else html+='<div class="note" style="margin:0 16px">未识别明确触发线程。</div>';
+  if(oom.culpritHint) html+=`<div class="note" style="margin:6px 16px;color:var(--warn)">真元凶线索：<b>${esc(oom.culpritHint.threadName)}</b> retained ${esc(oom.culpritHint.retained)}（${oom.culpritHint.percentHeap}%）— ${esc(oom.culpritHint.note||'')}</div>`;
+
+  // section 2：SQL 风险
+  const sql=sec.sqlInThreads||{};
+  html+=`<h3 style="margin:14px 16px 4px;color:var(--accent2)">② 线程栈中的 SQL（${sql.risky||0} 条高风险 / 共 ${sql.total||0}）</h3>`;
+  if(sql.items&&sql.items.length){
+    sql.items.forEach(h=>{
+      const rc={risky:'var(--err)',unknown:'var(--warn)',harmless:'var(--muted)'}[h.risk]||'var(--muted)';
+      html+=`<div class="leakcard ${h.risk==='risky'?'leak':''}">
+        <div class="leakhead"><span class="pill" style="color:${rc}">${esc(h.risk)}</span>
+          <b>${esc(h.threadName||'')}</b>
+          <span style="color:var(--muted)">retained ${esc(h.threadRetained||'-')}</span></div>
+        <div class="leakstack" style="color:var(--fg)">${esc(h.sql||'')}</div>
+        <div class="leakmeta">${esc(h.reason||'')}</div>
+      </div>`;
+    });
+  } else html+='<div class="note" style="margin:0 16px">线程栈中未提取到 SQL。</div>';
+
+  // section 3：Leak Suspects
+  const leak=sec.leakSuspects||{};
+  html+=`<h3 style="margin:14px 16px 4px;color:var(--accent2)">③ Leak Suspects</h3>`;
+  if(leak.conclusion) html+=`<div class="note" style="margin:0 16px">${esc(leak.conclusion)}</div>`;
+  if(leak.suspects&&leak.suspects.length){
+    leak.suspects.forEach(sp=>{
+      html+=`<div class="leakcard"><div class="leakhead"><span class="pill" style="color:var(--warn)">嫌疑</span>
+        <b>${esc(sp.label||'')}</b><span style="color:var(--muted)">retained ${esc(sp.retained||'-')}（${sp.percentHeap||0}%）</span></div>
+        <div class="leakmeta">累积点：${esc(sp.accumulationPoint||'-')}</div></div>`;
+    });
+  } else if(!leak.conclusion) html+='<div class="note" style="margin:0 16px">无明显嫌疑（或后端返回 composite 结构，前端按需展开）。</div>';
+
+  html+=`<div class="note" style="margin:12px 16px;color:var(--muted)">${esc(data.note||'')}</div>`;
+  host.innerHTML=html;
+  host.querySelectorAll('.leakcard[data-tid]').forEach(c=>c.onclick=()=>selectObj({objectId:parseInt(c.dataset.tid),label:'thread'},c));
+}
+
+async function renderLeak(host){
+  host.innerHTML='<div class="loading">运行 Leak Suspects（真实后端为异步任务，轮询进度）…</div>';
+  await sleep(600);
+  host.innerHTML=`<div class="note" style="font-size:13px;line-height:1.7">
+    <h3 style="color:var(--warn)">🩺 Leak Suspect 1</h3>
+    一个 <code>com.example.CacheManager</code> 实例（@ 0x7f3c）retained <b>175.8 KB（59.8% 堆）</b>，
+    由 <code>ConcurrentHashMap</code> 持有大量缓存项未释放。<br>
+    <b>累积点</b>：CacheManager.cache → CHM$Node[] →（大量 entry）<br>
+    ${qbtn('dominator','在 Dominator 中查看')}
+    <button data-p2g style="background:var(--panel);color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer">查看到 GC Root 的路径</button>
+    <br><br><span style="color:var(--muted)">（MOCK 演示。真实后端 /leak-suspects 返回 composite，含结论文本 + 嫌疑树。）</span>
+  </div>`;
+  host.querySelector('[data-open]').onclick=()=>openView('dominator');
+  host.querySelector('[data-p2g]').onclick=()=>openView('path2gc',{objectId:5567});
+}
+
+function renderOql(host){
+  host.innerHTML=`<div style="padding:12px">
+    <textarea id="oql" style="width:100%;height:70px;background:var(--panel);color:var(--fg);
+      border:1px solid var(--line);border-radius:8px;padding:10px;font-family:var(--mono);font-size:13px"
+      >SELECT * FROM com.example.Connection</textarea>
+    <div style="margin:8px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button id="runOql" style="background:var(--accent);color:#111;border:none;
+        border-radius:6px;padding:7px 16px;cursor:pointer;font-weight:600">▶ 执行</button>
+      <span style="color:var(--muted)">视图</span>
+      <select id="oqlView" style="background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px">
+        <option value="list">对象列表</option>
+        <option value="histogram">直方图（按类聚合）</option>
+      </select>
+      <span style="color:var(--muted)">排序</span>
+      <select id="oqlSort" style="background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px">
+        <option value="">默认</option>
+        <option value="retained">Retained ▾</option>
+        <option value="shallow">Shallow ▾</option>
+        <option value="count">Count ▾（仅直方图）</option>
+      </select>
+    </div>
+    <div id="oqlRes" class="note">输入 OQL，选视图/排序，点执行。直方图 = 对结果对象集按类聚合。</div></div>`;
+  const run=async()=>{
+    const q=host.querySelector('#oql').value.trim();
+    const view=host.querySelector('#oqlView').value;
+    const sort=host.querySelector('#oqlSort').value;
+    const res=host.querySelector('#oqlRes'); res.className=''; res.innerHTML='<div class="loading">执行中…</div>';
+    try{
+      const data=await API.oql(q, view, sort);
+      res.innerHTML=''; renderOqlResult(res, data, view);
+    }catch(e){ res.className='note'; res.innerHTML='<span style="color:var(--err)">执行失败：'+esc(e.message)+'</span>'; }
+  };
+  host.querySelector('#runOql').onclick=run;
+  // 切视图/排序自动重跑
+  host.querySelector('#oqlView').onchange=run;
+  host.querySelector('#oqlSort').onchange=run;
+}
+
+function renderOqlResult(host, data, view){
+  if(data.kind==='empty'){ host.innerHTML='<div class="note">无结果。</div>'; return; }
+  if(data.kind==='scalar'){ host.innerHTML='<div class="note">标量结果：<b>'+esc(data.value)+'</b></div>'; return; }
+
+  // ★ 结果集复用条：拿到 resultSetId → 可对这批对象再换角度分析（分析流灵魂）
+  const rsBar = (rsId) => rsId ? `<div class="rsbar">
+      <span>结果集 <code>${esc(rsId)}</code> — 对这批对象：</span>
+      <button data-rs-hist="${rsId}">📈 Histogram</button>
+      <button data-rs-ret="${rsId}">📦 Retained Set</button>
+    </div>` : '';
+  const wireRsBar = (root) => {
+    const h=root.querySelector('[data-rs-hist]'); if(h) h.onclick=()=>openView('histogramOfRS',{rs:h.dataset.rsHist});
+    const r=root.querySelector('[data-rs-ret]'); if(r) r.onclick=async()=>{
+      const d=await API.retainedSet(r.dataset.rsRet); toast('Retained set: '+(d.retained||d.total||'见结果')); };
+  };
+
+  // 直方图视图：复用 histogram 表样式
+  if(data.kind==='histogram'){
+    const h=data.histogram; const max=Math.max(...h.rows.map(r=>r.shallowBytes),1);
+    let html=rsBar(data.resultSetId)+`<div class="note">OQL 结果 ${data.resultObjects} 个对象，按类聚合（${h.rows.length} 类，排序：${h.sort}）</div>
+      <div class="ghead"><div class="gc name">Class</div>
+        <div class="gc num" style="width:80px">Objects</div>
+        <div class="gc num" style="width:110px">Shallow</div>
+        <div class="gc num" style="width:110px">Retained</div></div>`;
+    h.rows.forEach(r=>{ const w=Math.round(r.shallowBytes/max*100);
+      html+=`<div class="grow" data-cid="${r.classId}"><div class="gc name">${esc(r.label)}
+          <div class="bar"><i style="width:${w}%"></i></div></div>
+        <div class="gc num" style="width:80px">${r.count}</div>
+        <div class="gc num" style="width:110px">${r.shallow}</div>
+        <div class="gc num" style="width:110px">${r.retained}${r.retainedApprox?' <span class="approx">≈</span>':''}</div></div>`;
+    });
+    host.innerHTML=html; wireRsBar(host);
+    return;
+  }
+  // 对象列表视图
+  if(data.kind==='objectList'){
+    let html=rsBar(data.resultSetId)+`<div class="note">${data.totalRows} 个对象${data.truncated?'（已截断）':''}。右键行可联动；切到"直方图"视图按类聚合。</div>
+      <div class="ghead"><div class="gc name">Object</div>
+        <div class="gc num" style="width:110px">Shallow</div>
+        <div class="gc num" style="width:110px">Retained</div></div><div id="olrows"></div>`;
+    host.innerHTML=html; wireRsBar(host);
+    const wrap=host.querySelector('#olrows');
+    data.rows.forEach(r=>{
+      const div=document.createElement('div'); div.className='grow';
+      div.innerHTML=`<div class="gc name">${esc(r.label)}</div>
+        <div class="gc num" style="width:110px">${r.shallow||''}</div>
+        <div class="gc num" style="width:110px">${r.retained||''}</div>`;
+      div.onclick=()=>selectObj(r, div);
+      div.oncontextmenu=(e)=>rowMenu(e, r);
+      wrap.appendChild(div);
+    });
+  }
+}
+
+async function renderPath2gc(host, tab){
+  host.innerHTML=`<div class="note">
+    <h3>Path to GC Roots — 对象 #${tab.params.objectId}</h3>
+    引用链（最短路径）：<br><br>
+    <div style="font-family:var(--mono);line-height:2">
+    🧵 Thread "http-nio-8080-exec-7"<br>
+    &nbsp;&nbsp;└─ ⬇ &lt;Java Local&gt; com.example.RequestHandler<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ ⬇ service : com.example.CacheManager <b>← 累积点</b><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ ⬇ cache : ConcurrentHashMap (大量 entry)<br>
+    </div><br>
+    <span style="color:var(--muted)">真实后端：/path2gc?object=ID 返回引用链树（LazyTree 渲染）。
+    这条链说明 CacheManager 被 http 线程局部变量持有 → 未释放。</span></div>`;
+}
+
+/* ---------- 选中 + Inspector ---------- */
+async function selectObj(o, rowEl){
+  State.selected=o;
+  document.querySelectorAll('.grow.sel').forEach(e=>e.classList.remove('sel'));
+  if(rowEl && rowEl.classList) rowEl.classList.add('sel');
+  const insp=document.getElementById('inspector');
+  insp.innerHTML='<h3>Inspector</h3><div class="loading">加载详情…</div>';
+
+  // 拉对象详情（类对象也拉——为了显示静态字段+类信息）
+  let d = o;
+  try { d = await API.object(o.objectId); } catch(e){ d = {...o, _err:e.message}; }
+
+  const refLink = (id, text) => id>=0
+    ? `<a href="#" class="reflink" data-id="${id}">${esc(text)}</a>`
+    : esc(text);
+
+  let html = `<h3>Inspector ${d.gcRoot?'<span class="pill" style="background:#3a2f1a;color:var(--warn)">GC Root</span>':''}</h3>
+    <div class="kv">
+      <div class="k">label</div><div class="v">${esc(d.label||o.label||'')}</div>
+      <div class="k">id / addr</div><div class="v">${d.objectId}${d.address?' · '+esc(d.address):''}</div>
+      <div class="k">type</div><div class="v">${esc(d.type||o.type||'')}</div>
+      <div class="k">shallow</div><div class="v">${d.shallow||o.shallow||'-'}</div>
+      <div class="k">retained</div><div class="v">${d.retained||o.retained||'-'}</div>
+    </div>`;
+
+  // 语义值（String/char[]/URL 等的内容，含 Unicode）—— 醒目显示
+  if(d.value!=null && d.value!==''){
+    html += `<h3>Value</h3><div class="valbox">${esc(d.value)}</div>`;
+  }
+
+  // 类信息（点进类对象时）
+  if(d.kind==='class'){
+    html += `<div class="kv">
+      <div class="k">instances</div><div class="v">${d.instances??'-'}</div>
+      ${d.superclass?`<div class="k">superclass</div><div class="v">${esc(d.superclass)}</div>`:''}</div>`;
+  }
+  // 数组信息
+  if(d.kind==='primitiveArray' || d.kind==='objectArray'){
+    html += `<div class="kv"><div class="k">length</div><div class="v">${d.length??'-'}</div></div>`;
+  }
+
+  // 字段表（实例字段 / 静态字段）—— 带 Type 列 + 搜索 + 排序，渲染容器，逻辑在 renderFieldTable
+  const fieldTable = (id, title, list) => {
+    if(!list || !list.length) return '';
+    return `<h3>${title} (${list.length})</h3>
+      <input class="field-search" data-for="${id}" placeholder="🔎 按字段名/值搜索…">
+      <div class="ftbl" id="${id}">
+        <div class="fhead">
+          <div class="fc type" data-sort="type">Type</div>
+          <div class="fc name" data-sort="name">Name</div>
+          <div class="fc val"  data-sort="value">Value</div>
+        </div>
+        <div class="fbody"></div>
+      </div>`;
+  };
+  // 把字段数据存到 State，供搜索/排序重渲染
+  State.fieldData = { fields: normFields(d.fields), statics: normFields(d.staticFields) };
+  State.fieldSort = State.fieldSort || { fields:{key:'name',asc:true}, statics:{key:'name',asc:true} };
+  html += fieldTable('tbl-fields', 'Fields', d.fields);
+  html += fieldTable('tbl-statics', 'Static Fields', d.staticFields);
+  // 基本类型数组元素
+  if(d.elements && d.elements.items){
+    html += `<h3>Elements (${d.elements.total}${d.elements.truncated?'+':''})</h3>
+      <div class="v" style="font-family:var(--mono);font-size:11px;word-break:break-all">[${d.elements.items.join(', ')}]</div>`;
+  }
+
+  // 出引用
+  if(d.outbound && d.outbound.items){
+    html += `<h3>Outgoing (${d.outbound.total}${d.outbound.truncated?'+':''})</h3><div class="reflist">` +
+      d.outbound.items.map(r=>`<div class="refrow" data-id="${r.objectId}">
+        <span class="rn">${esc(r.name||'')}</span> ${refLink(r.objectId, r.label|| ('#'+r.objectId))}</div>`).join('') +
+      (d.outbound.truncated?'<div class="more">…还有更多（懒加载）</div>':'') + `</div>`;
+  }
+
+  // 入引用（谁引用我 —— 泄漏归因关键）
+  if(d.inbound && d.inbound.items){
+    html += `<h3>Incoming (${d.inbound.total}${d.inbound.truncated?'+':''})</h3><div class="reflist">` +
+      d.inbound.items.map(r=>`<div class="refrow">${refLink(r.objectId, r.label|| ('#'+r.objectId))}</div>`).join('') +
+      (d.inbound.truncated?'<div class="more">…还有更多（懒加载）</div>':'') + `</div>`;
+  }
+
+  if(d._err) html += `<div class="note" style="color:var(--err)">详情加载失败：${esc(d._err)}</div>`;
+
+  html += `<h3>动作</h3><div class="insp-actions">
+      <button data-a="path2gc">🔗 Path to GC Roots</button>
+      <button data-a="outbound">➡ Outgoing References (新Tab)</button>
+      <button data-a="inbound">⬅ Incoming References (新Tab)</button>
+      <button data-a="histogramOfSet">📈 Histogram of this set</button>
+    </div>`;
+  insp.innerHTML = html;
+
+  // 引用可点 → 选中那个对象（Inspector 跟着刷新，像 MAT 一样钻取）
+  insp.querySelectorAll('.reflink, .refrow[data-id]').forEach(el=>{
+    el.onclick=(e)=>{ e.preventDefault();
+      const id = parseInt(el.dataset.id || el.querySelector('.reflink')?.dataset.id);
+      if(!isNaN(id)) selectObj({objectId:id, label:el.textContent.trim()});
+    };
+  });
+  insp.querySelectorAll('.insp-actions [data-a]').forEach(b=>b.onclick=()=>doAction(b.dataset.a, o));
+
+  // 字段表：首次渲染 + 绑定搜索/排序
+  renderFieldTable('tbl-fields', State.fieldData.fields, 'fields');
+  renderFieldTable('tbl-statics', State.fieldData.statics, 'statics');
+  insp.querySelectorAll('.field-search').forEach(inp=>{
+    inp.oninput=()=>{
+      const id=inp.dataset.for;
+      const which = id==='tbl-fields'?'fields':'statics';
+      renderFieldTable(id, State.fieldData[which], which, inp.value.trim().toLowerCase());
+    };
+  });
+  insp.querySelectorAll('.ftbl .fhead .fc[data-sort]').forEach(h=>{
+    h.onclick=()=>{
+      const id=h.closest('.ftbl').id;
+      const which = id==='tbl-fields'?'fields':'statics';
+      const s=State.fieldSort[which];
+      if(s.key===h.dataset.sort) s.asc=!s.asc; else { s.key=h.dataset.sort; s.asc=true; }
+      const searchVal=(insp.querySelector(`.field-search[data-for="${id}"]`)?.value||'').trim().toLowerCase();
+      renderFieldTable(id, State.fieldData[which], which, searchVal);
+    };
+  });
+}
+
+/* 字段数据归一化（兼容 {name,value,type,isRef,refId} 与旧的 [name,value] 数组） */
+function normFields(list){
+  if(!list) return [];
+  return list.map(f => (typeof f==='object' && !Array.isArray(f))
+    ? {name:f.name, type:f.type||'', value:String(f.value), isRef:!!f.isRef, refId:f.refId??-1}
+    : {name:f[0], type:'', value:String(f[1]), isRef:false, refId:-1});
+}
+
+/* 渲染字段表：按 filter 过滤 + 按 State.fieldSort 排序，引用值可点 */
+function renderFieldTable(tblId, data, which, filter){
+  const tbl=document.getElementById(tblId); if(!tbl) return;
+  const body=tbl.querySelector('.fbody'); if(!body) return;
+  const s=State.fieldSort[which];
+  // 排序表头：高亮当前列 + 文字加方向箭头（用 data-label 存原始名，避免箭头叠加）
+  tbl.querySelectorAll('.fhead .fc[data-sort]').forEach(c=>{
+    c.dataset.label = c.dataset.label || c.textContent.replace(/[▲▼\s]+$/,'').trim();
+    const dir = (c.dataset.sort===s.key) ? (s.asc?' ▲':' ▼') : '';
+    c.textContent = c.dataset.label + dir;
+    c.classList.toggle('sorted', c.dataset.sort===s.key);
+  });
+  let rows=data.slice();
+  if(filter) rows=rows.filter(f=>f.name.toLowerCase().includes(filter)||f.value.toLowerCase().includes(filter));
+  rows.sort((a,b)=>{
+    const va=(a[s.key]||'').toLowerCase(), vb=(b[s.key]||'').toLowerCase();
+    return (va<vb?-1:va>vb?1:0)*(s.asc?1:-1);
+  });
+  body.innerHTML = rows.length ? rows.map(f=>`
+    <div class="frow">
+      <div class="fc type">${esc(f.type)}</div>
+      <div class="fc name">${esc(f.name)}</div>
+      <div class="fc val">${f.isRef&&f.refId>=0?`<a href="#" class="reflink" data-id="${f.refId}">${esc(f.value)}</a>`:esc(f.value)}</div>
+    </div>`).join('') : `<div class="frow"><div class="fc" style="color:var(--muted)">无匹配字段</div></div>`;
+  // 重新绑定值里的引用链接
+  body.querySelectorAll('.reflink').forEach(a=>a.onclick=(e)=>{e.preventDefault();
+    const id=parseInt(a.dataset.id); if(!isNaN(id)) selectObj({objectId:id,label:a.textContent.trim()});});
+}
+
+/* ---------- 右键菜单 + 视图联动（MAT 体验的灵魂） ---------- */
+function rowMenu(ev, o){
+  ev.preventDefault();
+  closeMenu();
+  const m=document.createElement('div'); m.className='ctx';
+  m.style.left=Math.min(ev.clientX, innerWidth-220)+'px';
+  m.style.top=Math.min(ev.clientY, innerHeight-260)+'px';
+  const items = o.isClass
+    ? [['list','📋 List objects of class'],['sep'],['path2gc','🔗 Merge paths to GC roots'],['dominator','🌲 Show in dominator']]
+    : [['inspect','🔍 Inspect'],['path2gc','🔗 Path to GC roots'],['sep'],
+       ['outbound','➡ Outgoing refs'],['inbound','⬅ Incoming refs'],['sep'],['histogramOfSet','📈 Histogram of set']];
+  m.innerHTML=items.map(it=> it[0]==='sep'?'<div class="sep"></div>':`<div class="mi" data-a="${it[0]}">${it[1]}</div>`).join('');
+  document.body.appendChild(m);
+  m.querySelectorAll('[data-a]').forEach(mi=>mi.onclick=()=>{ closeMenu(); doAction(mi.dataset.a, o); });
+}
+function doAction(a, o){
+  if(a==='inspect') return selectObj(o);
+  if(a==='path2gc') return openView('path2gc',{objectId:o.objectId});
+  if(a==='dominator') return openView('dominator');
+  if(a==='outbound') return openView('outbound',{objectId:o.objectId});
+  if(a==='inbound') return openView('outbound',{objectId:o.objectId}); // 原型共用
+  if(a==='histogramOfSet') return openView('histogramOfSet',{set:o.objectId});
+  if(a==='list') return openView('histogram',{}); // 原型示意
+  toast('动作: '+a+'（原型示意）');
+}
+function closeMenu(){ document.querySelectorAll('.ctx').forEach(e=>e.remove()); }
+document.addEventListener('click', closeMenu);
+
+/* ---------- 杂项 ---------- */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),1800); }
+
+/* 左侧菜单 */
+document.querySelectorAll('#nav .item').forEach(it=>it.onclick=()=>{
+  document.querySelectorAll('#nav .item').forEach(x=>x.classList.remove('active'));
+  it.classList.add('active'); openView(it.dataset.view);
+});
+
+/* 连接真实后端 */
+document.getElementById('connectBtn').onclick=async()=>{
+  State.base=document.getElementById('baseUrl').value.trim();
+  State.dumpDir=document.getElementById('dumpDir').value.trim();
+  try{
+    const r=await fetch(State.base+'/health'); const j=await r.json();
+    if(j.status==='ok'){ State.live=true;
+      document.getElementById('modeBadge').className='badge live';
+      document.getElementById('modeBadge').textContent='LIVE 真实后端';
+      toast('已连接 query-service'); renderView();
+    }
+  }catch(e){ toast('连接失败：'+e.message+'（继续用 MOCK）'); }
+};
+
+/* 启动 */
+openView('overview');
+</script>
+</body>
+</html>

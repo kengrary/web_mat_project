@@ -63,6 +63,13 @@ Python-side env vars (`DATABASE_URL`, `HEAPDUMP_STORAGE_ROOT`, `MAT_QUERY_SERVIC
 
 Leakhunter (and other MAT report queries) return `SectionSpec` at the top level; missing branches 5–6 produces the useless `{"kind":"raw","value":"org.eclipse.mat.report.SectionSpec@…"}`.
 
+**`/leak-suspects` 返回 shape**（由 `DiagnosticsView.leakSuspects` 专用包装，不是 ResultRenderer 直接吐出的通用形态）：
+`{kind:"leak-suspects", suspects:[{name,className,instanceCount,retainedBytes,description,preferredObjectId}], report:{kind:"section", parts:[…]}}`。
+前端/Agent 优先读 `suspects[]`（紧凑、可直接渲染卡片/给 LLM 读）；要钻取细节（子表、钻取命令等）再读 `report`。Python 侧 `mat_leak_suspects` agent 工具遍历 `data["suspects"]`，不要遍历 `parts`。
+
+**表格/树单元格的 retained 近似约定**：MAT 用负 `long` 编码"approximate lower bound"（支配树 O(1) 的 `getMinRetainedSize`），`ResultRenderer` 在列名包含 "retained" 时自动 `abs()` 并在该行加 `retainedApprox:true`。前端对 `retainedApprox:true` 的 retained 数字请显示 "≈"。`cells[]` 仍是字符串数组（保持向后兼容）；列元数据额外带 `retained:boolean`。
+
+
 **HTTP server is JDK built-in `com.sun.net.httpserver.HttpServer`**, not Spring/Netty/Jetty. If OSGi hides the package (CNF on startup), add `org.osgi.framework.system.packages.extra=com.sun.net.httpserver` to `/home/pan/mat/configuration/config.ini`.
 
 **Two OOM endpoints — don't mix up:**

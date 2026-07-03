@@ -141,15 +141,24 @@ public final class ResultRenderer {
 
     private static String renderTable(IResultTable table) {
         Column[] cols = table.getColumns();
+        boolean[] retainedCol = new boolean[cols.length];
         Json colsJson = Json.arr();
-        for (Column c : cols) colsJson.item(Json.obj().kv("label", c.getLabel()).endObj());
+        for (int ci = 0; ci < cols.length; ci++) {
+            Column c = cols[ci];
+            String label = c.getLabel();
+            retainedCol[ci] = label != null && label.toLowerCase().contains("retained");
+            colsJson.item(Json.obj()
+                    .kv("label", label)
+                    .kv("retained", retainedCol[ci])
+                    .endObj());
+        }
 
         int total = table.getRowCount();
         int limit = Math.min(total, 200);          // 表格瘦身：默认上限 200 行
         Json rows = Json.arr();
         for (int r = 0; r < limit; r++) {
             Object row = table.getRow(r);
-            rows.item(renderStructuredRow(table, cols.length, row));
+            rows.item(renderStructuredRow(table, cols, retainedCol, row));
         }
         Json out = Json.obj()
                 .kv("kind", "table")
@@ -173,28 +182,41 @@ public final class ResultRenderer {
      */
     private static String renderTreeLevel(IResultTree tree, Object parent, int limit) {
         Column[] cols = tree.getColumns();
+        boolean[] retainedCol = new boolean[cols.length];
         List<?> elements = (parent == null) ? tree.getElements() : tree.getChildren(parent);
 
         Json colsJson = Json.arr();
-        for (Column c : cols) colsJson.item(Json.obj().kv("label", c.getLabel()).endObj());
+        for (int ci = 0; ci < cols.length; ci++) {
+            Column c = cols[ci];
+            String label = c.getLabel();
+            retainedCol[ci] = label != null && label.toLowerCase().contains("retained");
+            colsJson.item(Json.obj()
+                    .kv("label", label)
+                    .kv("retained", retainedCol[ci])
+                    .endObj());
+        }
 
         int total = elements == null ? 0 : elements.size();
         int n = Math.min(total, limit);
         Json rows = Json.arr();
         for (int i = 0; i < n; i++) {
             Object el = elements.get(i);
-            Json row = Json.obj();
             // 列值
             Json cells = Json.arr();
+            boolean approx = false;
             for (int ci = 0; ci < cols.length; ci++) {
                 Object v = safeColumnValue(tree, el, ci);
-                cells.item("\"" + esc(String.valueOf(v)) + "\"");
+                CellRendered cr = renderCell(v, retainedCol[ci]);
+                cells.item(cr.text);
+                if (cr.approx) approx = true;
             }
             int objId = contextObjectId(tree.getContext(el));
             boolean expandable = tree.hasChildren(el);
-            rows.item(row
+            Json row = Json.obj()
                     .kv("objectId", objId)
-                    .kv("expandable", expandable)   // 前端据此决定是否可继续展开
+                    .kv("expandable", expandable);
+            if (approx) row.kv("retainedApprox", true);
+            rows.item(row
                     .raw("cells", cells.endArr())
                     .endObj());
         }
@@ -210,15 +232,47 @@ public final class ResultRenderer {
 
     // ===================== helpers =====================
 
-    private static String renderStructuredRow(IResultTable table, int colCount, Object row) {
+    private static String renderStructuredRow(IResultTable table, Column[] cols, boolean[] retainedCol, Object row) {
         Json cells = Json.arr();
-        for (int ci = 0; ci < colCount; ci++) {
+        boolean approx = false;
+        for (int ci = 0; ci < cols.length; ci++) {
             Object v = safeColumnValue(table, row, ci);
-            cells.item("\"" + esc(String.valueOf(v)) + "\"");
+            CellRendered cr = renderCell(v, retainedCol[ci]);
+            cells.item(cr.text);
+            if (cr.approx) approx = true;
         }
         int objId = contextObjectId(table.getContext(row));
-        return Json.obj().kv("objectId", objId).raw("cells", cells.endArr()).endObj();
+        Json out = Json.obj().kv("objectId", objId);
+        if (approx) out.kv("retainedApprox", true);
+        return out.raw("cells", cells.endArr()).endObj();
     }
+
+    /**
+     * Render a single cell value to a JSON-quoted string. For retained columns,
+     * MAT uses negative {@code long} values to flag "approximate lower bound"
+     * (see {@code ISnapshot.getMinRetainedSize()}); we abs() the value and set
+     * {@link CellRendered#approx} so the caller can add a {@code retainedApprox}
+     * marker for the frontend/agent.
+     */
+    private static CellRendered renderCell(Object v, boolean isRetainedCol) {
+        if (v == null) return new CellRendered("null", false);
+        String s;
+        boolean approx = false;
+        if (isRetainedCol && v instanceof Number n) {
+            long lv = n.longValue();
+            if (lv < 0) {
+                s = String.valueOf(-lv);
+                approx = true;
+            } else {
+                s = String.valueOf(lv);
+            }
+        } else {
+            s = String.valueOf(v);
+        }
+        return new CellRendered("\"" + esc(s) + "\"", approx);
+    }
+
+    private record CellRendered(String text, boolean approx) { }
 
     private static Object safeColumnValue(Object structuredResult, Object row, int col) {
         try {

@@ -191,20 +191,29 @@ public final class DiagnosticsView {
             "^The class (.+?), loaded by .+?, occupies ([\\d,]+) ");
 
     /**
-     * 单对象 → GC Root 最短路径（path2gc）。返回 IResultTree（引用链树）。
+     * 单对象 → GC Root 最短路径（path2gc）。
      * 泄漏归因核心："谁攥着这个对象不放"。
+     *
+     * <p>MAT 内置 {@code path2gc} query 返回 IResultTree，但它是 UI 懒加载形态——只有 root 节点，
+     * 子节点靠 UI 再次发 query 展开（不是一次性给完整路径）。为了让 Agent/前端直接拿到可读链，这里
+     * 直接用 {@link ISnapshot#getPathsFromGCRoots} 计算最短路径（MAT 内部支配树/引用链 BFS），
+     * 同时附上原始 tree 用于交互式展开。
      *
      * @param objectId 目标对象
      * @param excludeWeakSoft 是否排除弱/软/虚引用（避免无关引用干扰，常用 true）
      */
     public static String pathToGcRoots(ISnapshot snapshot, int objectId,
                                        boolean excludeWeakSoft, IProgressListener listener) throws Exception {
-        Map<String, Object> args = new java.util.HashMap<>();
-        args.put("object", new int[]{ objectId });
-        // path2gc 支持排除模式参数（excludes）；不同 MAT 版本参数名/形态可能不同，
-        // 这里仅传 object，excludeWeakSoft 的精细排除可在 merge_shortest_paths 用 -excludes 表达。
-        IResult r = QueryRunner.run(snapshot, "path2gc", args, listener);
-        return ResultRenderer.render(r);
+        IResult r = QueryRunner.run(snapshot, "path2gc",
+                Map.of("object", new int[]{ objectId }), listener);
+        String rendered = ResultRenderer.render(r);
+        String paths = PathsLinearizer.pathsFromGCRoots(snapshot, objectId, 5, 30);
+        return Json.obj()
+                .kv("kind", "paths-to-gc-roots")
+                .kv("objectId", objectId)
+                .raw("paths", paths)
+                .raw("tree", rendered)
+                .endObj();
     }
 
     /**

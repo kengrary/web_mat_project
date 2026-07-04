@@ -122,11 +122,14 @@ public final class ThreadLocalsView {
                     .kv("sampleObjectId", sampleId.get(e.getKey()))   // 一个样本，可点进去
                     .endObj());
         }
+        String arrStr = arr.endArr();
         return Json.obj()
                 .kv("groupBy", "valueClass")
                 .kv("totalThreadLocals", all.size())
                 .kv("totalClasses", rows.size())
-                .raw("rows", arr.endArr())
+                .raw("rows", arrStr)
+                .raw("entries", arrStr)     // alias for Python tool
+                .raw("groups", arrStr)      // alias
                 .kv("returned", n)
                 .endObj();
     }

@@ -114,10 +114,13 @@ public final class SqlExtractor {
                     .kv("reason", h.reason)
                     .endObj());
         }
+        String arrStr = arr.endArr();
         return Json.obj()
                 .kv("total", hits.size())
                 .kv("risky", risky)
-                .raw("items", arr.endArr())
+                .raw("items", arrStr)
+                .raw("matches", arrStr)       // alias for Python tool
+                .raw("threads", arrStr)       // alias
                 .endObj();
     }
 

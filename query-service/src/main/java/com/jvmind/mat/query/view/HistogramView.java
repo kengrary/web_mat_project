@@ -93,11 +93,18 @@ public final class HistogramView {
 
             Json row = Json.obj()
                     .kv("classId", r.getClassId())
+                    .kv("objectId", r.getClassId())          // alias for tool/frontend
+                    .kv("id", r.getClassId())                 // alias
                     .kv("label", r.getLabel())
+                    .kv("className", r.getLabel())            // alias
                     .kv("count", r.getNumberOfObjects())
+                    .kv("objectCount", r.getNumberOfObjects())
+                    .kv("numberOfObjects", r.getNumberOfObjects())
                     .kv("shallowBytes", r.getUsedHeapSize())
+                    .kv("shallowHeap", r.getUsedHeapSize())
                     .kv("shallow", Json.humanBytes(r.getUsedHeapSize()))
                     .kv("retainedBytes", hasRetained ? retainedBytes : 0)
+                    .kv("retainedHeap", hasRetained ? retainedBytes : 0)
                     .kv("retained", hasRetained ? Json.humanBytes(retainedBytes) : "n/a")
                     // 诚实标注：approximate=true 时前端可显示 "≈"，提示这是下界近似而非精确值
                     .kv("retainedApprox", approx);

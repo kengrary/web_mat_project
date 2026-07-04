@@ -52,13 +52,16 @@ public final class DominatorView {
 
             rows.item(Json.obj()
                     .kv("objectId", id)
+                    .kv("id", id)
                     .kv("label", ObjectRows.safeDisplayName(o))
+                    .kv("className", o.getClazz() != null ? o.getClazz().getName() : "?")
                     .kv("type", o.getClazz() != null ? o.getClazz().getName() : "?")
                     .kv("shallowBytes", shallow)
                     .kv("shallow", Json.humanBytes(shallow))
                     .kv("retainedBytes", ret)
                     .kv("retained", Json.humanBytes(ret))
-                    .kv("percent", round1(pct))   // 占总堆百分比
+                    .kv("percent", round1(pct))
+                    .kv("retainedPercent", round1(pct))
                     .kv("expandable", expandable)
                     .endObj());
         }

@@ -43,13 +43,12 @@ public final class ThreadsView {
         Json rows = Json.arr();
         for (int i = from; i < to; i++) {
             IObject t = threads.get(i);
-            boolean hasStack;
+            int frameCount = 0;
             try {
                 IThreadStack st = snapshot.getThreadStack(t.getObjectId());
-                hasStack = st != null && st.getStackFrames() != null && st.getStackFrames().length > 0;
-            } catch (Exception e) {
-                hasStack = false;
-            }
+                if (st != null && st.getStackFrames() != null) frameCount = st.getStackFrames().length;
+            } catch (Exception e) { /* ignore */ }
+            boolean hasStack = frameCount > 0;
             rows.item(Json.obj()
                     .kv("objectId", t.getObjectId())
                     .kv("name", threadName(t))
@@ -59,6 +58,7 @@ public final class ThreadsView {
                     .kv("retainedBytes", t.getRetainedHeapSize())
                     .kv("retained", Json.humanBytes(t.getRetainedHeapSize()))
                     .kv("hasStack", hasStack)
+                    .kv("frameCount", frameCount)
                     .endObj());
         }
 
@@ -82,9 +82,19 @@ public final class ThreadsView {
                         catch (Exception ignore) { }
                     }
                 }
-                rows.item(Json.obj()
+                String text = frames[i].getText();
+                FrameParts parts = parseFrame(text);
+                Json row = Json.obj()
                         .kv("frameIdx", i)
-                        .kv("text", frames[i].getText())
+                        .kv("text", text);
+                if (parts != null) {
+                    if (parts.className != null) row.kv("className", parts.className);
+                    if (parts.methodName != null) row.kv("methodName", parts.methodName);
+                    if (parts.fileName != null) row.kv("fileName", parts.fileName);
+                    if (parts.lineNumber >= 0) row.kv("lineNumber", parts.lineNumber);
+                    if (parts.nativeMethod) row.kv("nativeMethod", true);
+                }
+                rows.item(row
                         .kv("localsCount", locals == null ? 0 : locals.length)
                         .kv("maxLocalRetainedBytes", maxLocalRetained)
                         .kv("maxLocalRetained", Json.humanBytes(maxLocalRetained))
@@ -93,6 +103,59 @@ public final class ThreadsView {
         }
         return Json.obj().kv("threadId", threadId).raw("frames", rows.endArr()).endObj();
     }
+
+    /**
+     * Parse MAT's standard frame text into structured parts.
+     * MAT formats frames as:
+     *   "at pkg.Class.method(sig) (SourceFile.java:123)"
+     *   "at pkg.Class.method(sig) (SourceFile.java(Native Method))"
+     *   "at pkg.Class.method(sig) (Unknown Source)"
+     *   Virtual-thread / lambda frames: "at pkg.Class$$Lambda+0x1234.run() ()"
+     *   Continuation / JIT frames may have no source.
+     * Returns null if the text doesn't match the expected pattern (caller falls back to text).
+     */
+    private static FrameParts parseFrame(String text) {
+        if (text == null) return null;
+        String t = text.trim();
+        // Strip leading "at "
+        if (t.startsWith("at ")) t = t.substring(3).trim();
+        int paren = t.lastIndexOf('(');
+        if (paren < 0) return null;
+        String before = t.substring(0, paren);
+        String inside = t.substring(paren + 1, t.endsWith(")") ? t.length() - 1 : t.length());
+        // before = "pkg.Class.method(signature)"
+        int sigStart = before.indexOf('(');
+        String methodPart = sigStart >= 0 ? before.substring(0, sigStart) : before;
+        int dot = methodPart.lastIndexOf('.');
+        String cls = dot >= 0 ? methodPart.substring(0, dot) : "";
+        String meth = dot >= 0 ? methodPart.substring(dot + 1) : methodPart;
+        // inside = "File.java:123" or "File.java(Native Method)" or "Unknown Source" or ""
+        String file = null;
+        int line = -1;
+        boolean nativeM = false;
+        if (inside.contains("Native Method")) {
+            nativeM = true;
+            // filename may precede "(Native Method)" in some MAT versions; typically just "Native Method"
+        } else if (!inside.isBlank() && !inside.contains("Unknown Source")) {
+            int colon = inside.lastIndexOf(':');
+            if (colon >= 0) {
+                file = inside.substring(0, colon).trim();
+                String lnStr = inside.substring(colon + 1).replace(")", "").trim();
+                try { line = Integer.parseInt(lnStr); } catch (NumberFormatException ignore) { }
+            } else {
+                file = inside.replace(")", "").trim();
+                if (file.isEmpty()) file = null;
+            }
+        }
+        return new FrameParts(
+                cls.isEmpty() ? null : cls,
+                meth.isEmpty() ? null : meth,
+                file,
+                line,
+                nativeM);
+    }
+
+    private record FrameParts(String className, String methodName, String fileName, int lineNumber, boolean nativeMethod) { }
 
     /** 三级：某栈帧的局部变量对象。 */
     public static String locals(ISnapshot snapshot, int threadId, int frameIdx) throws Exception {

@@ -49,9 +49,11 @@ public final class ThreadsView {
                 if (st != null && st.getStackFrames() != null) frameCount = st.getStackFrames().length;
             } catch (Exception e) { /* ignore */ }
             boolean hasStack = frameCount > 0;
+            String state = resolveThreadState(t);
             rows.item(Json.obj()
                     .kv("objectId", t.getObjectId())
                     .kv("name", threadName(t))
+                    .kv("state", state)
                     .kv("daemon", resolveBool(t, "daemon"))
                     .kv("priority", resolveInt(t, "priority"))
                     .kv("contextClassLoader", resolveLabel(snapshot, t, "contextClassLoader"))
@@ -204,5 +206,39 @@ public final class ThreadsView {
             if (v instanceof IObject io) return ObjectRows.safeDisplayName(io);
         } catch (Exception ignore) { }
         return null;
+    }
+
+    /**
+     * Resolve thread state from threadStatus field (bitmask).
+     * Matches MAT's ThreadDetailsResolver.printableState() logic.
+     * Field paths: "threadStatus" (JDK8) or "holder.threadStatus" (JDK9+ virtual threads).
+     */
+    private static String resolveThreadState(IObject t) {
+        int status = resolveInt(t, "threadStatus");
+        if (status == 0) {
+            // Try alternative field names
+            status = resolveInt(t, "threadStatus");
+        }
+        if (status == 0) return "";
+        return printableState(status);
+    }
+
+    /**
+     * Convert threadStatus bitmask to human-readable state string.
+     * Bitmask values from MAT's ThreadDetailsResolver (JDK Thread.threadStatus encoding).
+     */
+    private static String printableState(int status) {
+        // Priority order: most informative state first
+        if ((status & 4) != 0) return "RUNNABLE";               // bit 2
+        if ((status & 1024) != 0) return "BLOCKED";             // bit 10
+        if ((status & 64) != 0) return "SLEEPING";              // bit 6
+        if ((status & 128) != 0) return "WAITING";              // bit 7
+        if ((status & 16) != 0) return "WAITING";               // bit 4 (indefinitely)
+        if ((status & 32) != 0) return "TIMED_WAITING";         // bit 5 (with timeout)
+        if ((status & 256) != 0) return "IN_OBJECT_WAIT";       // bit 8
+        if ((status & 512) != 0) return "PARKED";               // bit 9
+        if ((status & 2) != 0) return "TERMINATED";             // bit 1
+        if ((status & 1) != 0) return "ALIVE";                  // bit 0 (just alive, no specific state)
+        return "";
     }
 }

@@ -1,6 +1,7 @@
 package com.jvmind.mat.query.http;
 
 import com.jvmind.mat.query.core.DumpLocator;
+import com.jvmind.mat.query.core.ResultCache;
 import com.jvmind.mat.query.core.SnapshotManager;
 import com.jvmind.mat.query.model.Json;
 import com.jvmind.mat.query.view.HistogramView;
@@ -52,6 +53,7 @@ public final class QueryHttpServer {
 
     private final SnapshotManager manager;
     private final com.jvmind.mat.query.task.TaskManager tasks;
+    private final ResultCache cache;
     private final com.jvmind.mat.query.core.ResultSetCache resultSets =
             new com.jvmind.mat.query.core.ResultSetCache();
     private final HttpServer server;
@@ -59,9 +61,11 @@ public final class QueryHttpServer {
     private static String corsOrigin;
 
     public QueryHttpServer(SnapshotManager manager, com.jvmind.mat.query.task.TaskManager tasks,
+                           ResultCache cache,
                            String bindAddress, int port, int threads) throws IOException {
         this.manager = manager;
         this.tasks = tasks;
+        this.cache = cache != null ? cache : new ResultCache(false, null);
         // CORS 来源：-DMAT_QUERY_CORS=*  或  =http://localhost:5173 。默认不发头（前端应走 Python 反代）
         String c = System.getProperty("MAT_QUERY_CORS");
         if (c == null || c.isBlank()) c = System.getenv("MAT_QUERY_CORS");
@@ -251,8 +255,10 @@ public final class QueryHttpServer {
         if (blank(dumpDir)) { send(ex, 400, err("missing dumpDir")); return; }
         int pct = Query.intOr(q, "culpritPct", 30);
         boolean onlyRisky = !"false".equalsIgnoreCase(q.getOrDefault("onlyRisky", "true"));
-        submitTask(ex, "diagnose-oom", dumpDir, (s, progress) ->
-                com.jvmind.mat.query.view.OomComposite.diagnose(s, pct, onlyRisky, progress));
+        String taskId = submitTask("diagnose-oom", dumpDir,
+                ResultCache.args("culpritPct", pct, "onlyRisky", onlyRisky),
+                (s, progress) -> com.jvmind.mat.query.view.OomComposite.diagnose(s, pct, onlyRisky, progress));
+        sendAccepted(ex, taskId);
     }
 
     /** 从线程栈提取 SQL：?dumpDir=&onlyRisky=true|false （默认 true，过滤心跳类）。 */
@@ -284,8 +290,9 @@ public final class QueryHttpServer {
     private void leakSuspects(HttpExchange ex) throws IOException {
         String dumpDir = Query.parse(ex).get("dumpDir");
         if (blank(dumpDir)) { send(ex, 400, err("missing dumpDir")); return; }
-        submitTask(ex, "leak-suspects", dumpDir, (s, progress) ->
-                DiagnosticsView.leakSuspects(s, progress));
+        String taskId = submitTask("leak-suspects", dumpDir,
+                (s, progress) -> DiagnosticsView.leakSuspects(s, progress));
+        sendAccepted(ex, taskId);
     }
 
     /** merge_shortest_paths：重操作 → 异步。POST body {"objects":[...]} 。 */
@@ -338,15 +345,33 @@ public final class QueryHttpServer {
 
         boolean async = "true".equalsIgnoreCase(q.getOrDefault("async", "false"));
         if (async) {
-            String taskId = tasks.submit("query:" + command, progress -> {
-                try (SnapshotManager.Lease lease = manager.acquire(dumpDir)) {
-                    return DiagnosticsView.runArbitrary(lease.snapshot(), command, args, progress);
-                }
-            });
-            send(ex, 202, Json.obj().kv("taskId", taskId).kv("status", "RUNNING").endObj());
+            Map<String, String> cacheKey = ResultCache.args("command", command, "args", argsToCacheString(args));
+            String taskId = submitTask("query:" + command, dumpDir, cacheKey,
+                    (s, progress) -> DiagnosticsView.runArbitrary(s, command, args, progress));
+            sendAccepted(ex, taskId);
         } else {
             withSnapshot(ex, s -> DiagnosticsView.runArbitrary(s, command, args, null));
         }
+    }
+
+    /** 把 args map 序列化成稳定字符串，用于缓存 key（TreeMap 排序 → 字符串）。*/
+    private static String argsToCacheString(Map<String, Object> args) {
+        if (args == null || args.isEmpty()) return "";
+        java.util.TreeMap<String, Object> sorted = new java.util.TreeMap<>(args);
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, Object> e : sorted.entrySet()) {
+            sb.append(e.getKey()).append('=');
+            Object v = e.getValue();
+            if (v instanceof int[] arr) {
+                int[] copy = arr.clone();
+                java.util.Arrays.sort(copy);
+                sb.append(java.util.Arrays.toString(copy));
+            } else {
+                sb.append(v);
+            }
+            sb.append(';');
+        }
+        return sb.toString();
     }
 
     /** 从 body 解析 args（轻量：取 "objects" int[] 约定，其余 query 可无参或后续扩展）。 */
@@ -378,14 +403,28 @@ public final class QueryHttpServer {
     }
 
     /** 提交一个"需要 snapshot 的重操作"为异步任务：任务体内 acquire 租约，覆盖整个执行期。 */
-    private void submitTask(HttpExchange ex, String kind, String dumpDir, SnapshotJob job)
-            throws IOException {
-        String taskId = tasks.submit(kind, progress -> {
-            // ★ 租约在任务线程内持有，覆盖整个执行期（重操作可能跑几分钟）
+    private String submitTask(String kind, String dumpDir, Map<String, String> cacheKey, SnapshotJob job) {
+        // 1) 缓存命中 → 直接返回一个已 DONE 的 synthetic task，不进线程池、不开 snapshot
+        String cached = cache.get(dumpDir, kind, cacheKey);
+        if (cached != null) {
+            return tasks.submitPrecomputed(kind, cached);
+        }
+        // 2) 缓存未命中 → 走异步执行，完成后写缓存
+        return tasks.submit(kind, progress -> {
             try (SnapshotManager.Lease lease = manager.acquire(dumpDir)) {
-                return job.run(lease.snapshot(), progress);
+                String result = job.run(lease.snapshot(), progress);
+                cache.put(dumpDir, kind, cacheKey, result);
+                return result;
             }
         });
+    }
+
+    /** 便捷版：无影响结果的参数（纯 dumpDir+kind 决定结果），如 leak-suspects。 */
+    private String submitTask(String kind, String dumpDir, SnapshotJob job) {
+        return submitTask(kind, dumpDir, ResultCache.args(), job);
+    }
+
+    private void sendAccepted(HttpExchange ex, String taskId) throws IOException {
         send(ex, 202, Json.obj().kv("taskId", taskId).kv("status", "RUNNING").endObj());
     }
 
@@ -408,7 +447,17 @@ public final class QueryHttpServer {
             if (ids.length == 0) { send(ex, 400, err("missing 'objects' array or objectSet param")); return; }
         }
         final int[] objs = ids;
-        submitTask(ex, kind, dumpDir, (s, progress) -> fn.apply(s, objs, progress));
+        // cache key 用 object id 集合（排序后拼接），不关心 body/rs 参数来源
+        java.util.Arrays.sort(objs);
+        StringBuilder sb = new StringBuilder(objs.length * 8);
+        for (int i = 0; i < objs.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(objs[i]);
+        }
+        String taskId = submitTask(kind, dumpDir,
+                ResultCache.args("objects", sb.toString()),
+                (s, progress) -> fn.apply(s, objs, progress));
+        sendAccepted(ex, taskId);
     }
 
     @FunctionalInterface

@@ -2,6 +2,7 @@ package com.jvmind.mat.query;
 
 import com.jvmind.mat.query.core.DumpLocator;
 import com.jvmind.mat.query.core.MemoryWatcher;
+import com.jvmind.mat.query.core.ResultCache;
 import com.jvmind.mat.query.core.SnapshotManager;
 import com.jvmind.mat.query.http.QueryHttpServer;
 import com.jvmind.mat.query.task.TaskManager;
@@ -52,9 +53,10 @@ public final class QueryServiceApp implements IApplication {
         DumpLocator locator = new DumpLocator.ByExplicitDir();
         SnapshotManager manager = new SnapshotManager(locator, maxOpen);
         tasks = new TaskManager(taskThreads, taskTimeout);
+        ResultCache cache = ResultCache.fromSystemProps();
         watcher = new MemoryWatcher(manager, heapPct, /*idleMillis*/ 60_000);
         watcher.start();
-        http = new QueryHttpServer(manager, tasks, bindAddr, port, threads);
+        http = new QueryHttpServer(manager, tasks, cache, bindAddr, port, threads);
         http.start();
 
         System.out.println("[query-service] started on " + bindAddr + ":" + port + " (OSGi application)");

@@ -38,6 +38,8 @@ Top-level docs: `MEMORY-SNAPSHOT.md` (cheapest context reload) → `README.md` �
 | `MAT_QUERY_HEAP_PCT` | `85` | MemoryWatcher proactive-dispose threshold (%) |
 | `MAT_QUERY_TASK_THREADS` | `2` | Async heavy-task pool size |
 | `MAT_QUERY_TASK_TIMEOUT` | `300` | Heavy-task timeout (seconds) |
+| `MAT_QUERY_CACHE` | `true` | Whether to disk-cache heavy query results (leak-suspects/retained-set/merge-paths/diagnose-oom). `false` disables. |
+| `MAT_QUERY_CACHE_DIR` | `<dumpDir>/.query-cache` | Override cache directory; default is a hidden subdir of each dumpDir (lifetime tied to the dump). |
 | `MAT_QUERY_CORS` | (unset) | CORS origin; **never set in prod** — dev only for `web-prototype` direct-to-:8090 |
 
 Python-side env vars (`DATABASE_URL`, `HEAPDUMP_STORAGE_ROOT`, `MAT_QUERY_SERVICE_URL`, `MAT_HOME`, `MAT_PARSE_XMX`, per-endpoint timeouts) live in the Python workspace's own config; don't document them here.
@@ -77,7 +79,7 @@ Leakhunter (and other MAT report queries) return `SectionSpec` at the top level;
 - `GET /oom-diagnosis` — sync, lightweight, used by the overview OOM banner.
 - `GET /diagnose-oom` — async heavy composite (OOM culprit thread + SQL risk + Leak Suspects); returns `{taskId}`, poll `GET /tasks/{id}`.
 
-Heavy queries running via `TaskManager` (dedicated bounded pool, cooperative cancel, SoftReference-cached results → may evict as `resultEvicted:true`, forcing a rerun): `leakhunter` → `/leak-suspects`, `show_retained_set` → `/retained-set`, `merge_shortest_paths` → `/merge-paths`, composite → `/diagnose-oom`.
+Heavy queries running via `TaskManager` (dedicated bounded pool, cooperative cancel, disk-cache + SoftReference-cached results; disk cache at `<dumpDir>/.query-cache/<kind>-<argsSha256>.json` survives restarts and is auto-invalidated when hprof mtime is newer): `leakhunter` → `/leak-suspects`, `show_retained_set` → `/retained-set`, `merge_shortest_paths` → `/merge-paths`, composite → `/diagnose-oom`. Cache-hit tasks return with `taskId` prefix `c-` and status `DONE` immediately (skip thread pool + snapshot open). Disable with `-DMAT_QUERY_CACHE=false` for development/benchmarking.
 
 **MAT-API quirks:**
 

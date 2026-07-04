@@ -54,14 +54,33 @@ public final class TaskManager {
 
     /** 提交一个重操作，立即返回 taskId。 */
     public String submit(String kind, Job job) {
-        String id = "t-" + Long.toHexString(seq.incrementAndGet()) + "-"
-                + Long.toHexString(System.nanoTime());
+        String id = newId();
         Task task = new Task(id, kind);
         tasks.put(id, task);
 
         Future<?> future = pool.submit(() -> execute(task, job));
         task.future = future;
         return id;
+    }
+
+    /**
+     * 登记一个"已完成"任务（典型场景：缓存命中），立即以 DONE 状态返回 taskId。
+     * 客户端轮询 /tasks/{id} 会直接拿到 result，不会进线程池、不会重跑。
+     */
+    public String submitPrecomputed(String kind, String resultJson) {
+        String id = "c-" + newId();   // "c-" 前缀标识 cached，便于日志辨识
+        Task task = new Task(id, kind);
+        task.status = Status.DONE;
+        task.result = new SoftReference<>(resultJson);
+        task.startedAt = System.currentTimeMillis();
+        task.finishedAt = task.startedAt;
+        tasks.put(id, task);
+        return id;
+    }
+
+    private String newId() {
+        return "t-" + Long.toHexString(seq.incrementAndGet()) + "-"
+                + Long.toHexString(System.nanoTime());
     }
 
     private void execute(Task task, Job job) {

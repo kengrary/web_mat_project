@@ -112,8 +112,10 @@ public final class ResultCache {
     private static Path findHprof(String dumpDir) {
         try {
             try (var stream = Files.list(Paths.get(dumpDir))) {
-                return stream.filter(p -> p.getFileName().toString().endsWith(".hprof"))
-                        .findFirst().orElse(null);
+                return stream.filter(p -> {
+                    String n = p.getFileName().toString();
+                    return n.endsWith(".hprof") || n.endsWith(".hprof.gz");
+                }).findFirst().orElse(null);
             }
         } catch (IOException e) {
             return null;

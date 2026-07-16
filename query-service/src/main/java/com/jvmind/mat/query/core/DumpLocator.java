@@ -43,7 +43,7 @@ public interface DumpLocator {
         @Override
         public Location locate(String dumpDirPath) {
             File dir = new File(dumpDirPath);
-            File[] hprofs = dir.listFiles((d, n) -> n.endsWith(".hprof") || n.endsWith(".bin"));
+            File[] hprofs = dir.listFiles((d, n) -> n.endsWith(".hprof") || n.endsWith(".bin") || n.endsWith(".hprof.gz"));
             if (hprofs == null || hprofs.length == 0) {
                 throw new IllegalStateException("no .hprof under " + dir);
             }

@@ -61,6 +61,7 @@ public final class ThreadsView {
                     .kv("retained", Json.humanBytes(t.getRetainedHeapSize()))
                     .kv("hasStack", hasStack)
                     .kv("frameCount", frameCount)
+                    .kv("address", "0x" + Long.toHexString(t.getObjectAddress()))
                     .endObj());
         }
 

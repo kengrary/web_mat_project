@@ -85,6 +85,7 @@ Heavy queries running via `TaskManager` (dedicated bounded pool, cooperative can
 
 - Approximate retained size = `ISnapshot.getMinRetainedSize()` (cheap, O(1) via dominator tree). Exact retained = calculate retained set (full mark-sweep, expensive, async only).
 - `getHistogram()` returns entries with `count == 0` for uninstantiated classes/interfaces — that's normal, not a bug.
+- **必填 ID 字段（`thread` / `parent` / 任何 objectId 形参）必须用 `Query.parseObjectId`，并自行 400**：它接受十进制、`0x...` hex、以及不带前缀的 8 字符以内 hex 串（MAT 报告贴地址常见）。`Query.intOr` 只用于可选参数（`top`/`offset`/`thresholdMs`），非法值会**静默回退默认**——绝不能用在必填 ID 上，否则 LLM 拼错参数名也只会默默返回错误结果。
 
 ## Architecture invariants
 

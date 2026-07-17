@@ -191,18 +191,31 @@ public final class QueryHttpServer {
      */
     private void threads(HttpExchange ex) throws IOException {
         Map<String, String> q = Query.parse(ex);
-        withSnapshot(ex, s -> {
-            String thread = q.get("thread");
-            if (thread == null) {
-                return ThreadsView.threads(s, Query.intOr(q, "top", 100), Query.intOr(q, "offset", 0));
-            }
-            int tid = Integer.parseInt(thread);
-            String frame = q.get("frame");
-            if (frame == null) {
-                return ThreadsView.frames(s, tid);
-            }
-            return ThreadsView.locals(s, tid, Integer.parseInt(frame));
-        });
+        String thread = q.get("thread");
+        if (thread == null) {
+            withSnapshot(ex, s -> ThreadsView.threads(s, Query.intOr(q, "top", 100), Query.intOr(q, "offset", 0)));
+            return;
+        }
+        int tid;
+        try {
+            tid = Query.parseObjectId(thread);
+        } catch (IllegalArgumentException badThread) {
+            send(ex, 400, err("invalid 'thread' parameter: " + badThread.getMessage()));
+            return;
+        }
+        String frame = q.get("frame");
+        if (frame == null) {
+            withSnapshot(ex, s -> ThreadsView.frames(s, tid));
+            return;
+        }
+        int frameIdx;
+        try {
+            frameIdx = Integer.parseInt(frame);
+        } catch (NumberFormatException badFrame) {
+            send(ex, 400, err("invalid 'frame' parameter: " + frame));
+            return;
+        }
+        withSnapshot(ex, s -> ThreadsView.locals(s, tid, frameIdx));
     }
 
     /** OQL：POST body {"q":"...","limit":200,"offset":0}，dumpDir 走 query 参数。 */

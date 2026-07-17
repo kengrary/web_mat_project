@@ -28,7 +28,16 @@ public final class DominatorView {
      * @param offset 分页偏移
      */
     public static String children(ISnapshot snapshot, String parent, int top, int offset) throws Exception {
-        int parentId = "ROOT".equalsIgnoreCase(parent) ? -1 : Integer.parseInt(parent);
+        int parentId;
+        if (parent == null || parent.isBlank() || "ROOT".equalsIgnoreCase(parent)) {
+            parentId = -1;
+        } else {
+            try {
+                parentId = Integer.parseInt(parent);
+            } catch (NumberFormatException nfe) {
+                throw new IllegalArgumentException("invalid 'parent' parameter (expected ROOT or decimal object id): " + parent, nfe);
+            }
+        }
 
         int[] childIds = snapshot.getImmediateDominatedIds(parentId);
 

@@ -144,7 +144,7 @@ Python 鉴权后透传到 `MAT_QUERY_SERVICE_URL`。前端**不持有 dumpDir**�
 | `GET` | `/api/heapdump-reports/{id}/overview` | `GET /overview?dumpDir=` | `full=true`（含 Heap Dump Info + System Properties） |
 | `GET` | `/api/heapdump-reports/{id}/histogram` | `GET /histogram?dumpDir=` | `top=50` `offset=0` `sort=shallow\|retained\|count` `approx=true` `objectSet=rs-xxx` |
 | `GET` | `/api/heapdump-reports/{id}/dominator` | `GET /dominator?dumpDir=` | `parent=ROOT\|<objectId>` `top=50` `offset=0` |
-| `GET` | `/api/heapdump-reports/{id}/threads` | `GET /threads?dumpDir=` | 不传=线程列表；`thread=<id>`=栈帧；`frame=<...>`=局部变量 |
+| `GET` | `/api/heapdump-reports/{id}/threads` | `GET /threads?dumpDir=` | 不传=线程列表（含 `address` 字段，MAT 内部 hex 形式，**仅展示用、不是 thread id**，thread id = `objectId`）；`thread=<id>`=栈帧；`frame=<...>`=局部变量 |
 | `GET` | `/api/heapdump-reports/{id}/threadlocals` | `GET /threadlocals?dumpDir=` | `groupBy=valueClass\|thread` `top=100` |
 | `POST` | `/api/heapdump-reports/{id}/oql` | `POST /oql?dumpDir=` | body `{"q":"...","limit":200,"offset":0}`；query `view=list\|histogram` `sort=...` |
 | `GET` | `/api/heapdump-reports/{id}/object` | `GET /object?dumpDir=` | `id=<objectId>`（**Inspector 唯一数据源**：字段+静态字段+出/入引用+GC root+值） |

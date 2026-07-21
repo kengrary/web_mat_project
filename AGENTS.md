@@ -85,7 +85,11 @@ Heavy queries running via `TaskManager` (dedicated bounded pool, cooperative can
 
 - Approximate retained size = `ISnapshot.getMinRetainedSize()` (cheap, O(1) via dominator tree). Exact retained = calculate retained set (full mark-sweep, expensive, async only).
 - `getHistogram()` returns entries with `count == 0` for uninstantiated classes/interfaces — that's normal, not a bug.
-- **必填 ID 字段（`thread` / `parent` / 任何 objectId 形参）必须用 `Query.parseObjectId`，并自行 400**：它接受十进制、`0x...` hex、以及不带前缀的 8 字符以内 hex 串（MAT 报告贴地址常见）。`Query.intOr` 只用于可选参数（`top`/`offset`/`thresholdMs`），非法值会**静默回退默认**——绝不能用在必填 ID 上，否则 LLM 拼错参数名也只会默默返回错误结果。
+- **必填 ID 字段（`thread` / `parent` / 任何 objectId 形参）必须用 `Query.parseObjectId`，并自行 400**：它接受十进制整数与 `0x...` 前缀 hex。`Query.intOr` 只用于可选参数（`top`/`offset`/`thresholdMs`），非法值会**静默回退默认**——绝不能用在必填 ID 上，否则 LLM 拼错参数名也只会默默返回错误结果。
+
+  > **变更（0.1.0 → 0.2.0）**：原「≤8 字符裸 hex」分支已移除。所有 ≤8 字符的纯数字输入（如 `"20"`、`"100"`）此前会被静默当 hex 解析（`"20"` → 32），现统一走十进制。MAT 报告里的地址请带 `0x` 前缀。breaking change：把裸 hex 当 thread id 传的工具/脚本会从「silent 错返回空 frames」变成「400 invalid object id」——这正是预期行为。
+  >
+  > **TODO（已知 inconsistency，留待 0.3.0 统一）**：`/object?id=`、`/path2gc?object=`、`/dominator?parent=` 当前仍用 `Query.intOr`，会把 `id=0x20` 静默吃成 -1 然后返 400 "missing 'id'"，与上面规则相悖。修法是把 `intOr` 换成 `parseObjectId` + 显式 `-1` 检查。
 
 ## Architecture invariants
 

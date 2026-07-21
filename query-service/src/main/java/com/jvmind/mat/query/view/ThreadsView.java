@@ -73,8 +73,13 @@ public final class ThreadsView {
     /** 二级：某线程的栈帧。 */
     public static String frames(ISnapshot snapshot, int threadId) throws Exception {
         IThreadStack stack = snapshot.getThreadStack(threadId);
+        if (stack == null) {
+            throw new IllegalArgumentException(
+                "no java.lang.Thread with objectId=" + threadId
+                + " — call /threads (no 'thread' param) to list threads and use the 'objectId' field");
+        }
         Json rows = Json.arr();
-        if (stack != null && stack.getStackFrames() != null) {
+        if (stack.getStackFrames() != null) {
             IStackFrame[] frames = stack.getStackFrames();
             for (int i = 0; i < frames.length; i++) {
                 int[] locals = frames[i].getLocalObjectsIds();
@@ -163,16 +168,25 @@ public final class ThreadsView {
     /** 三级：某栈帧的局部变量对象。 */
     public static String locals(ISnapshot snapshot, int threadId, int frameIdx) throws Exception {
         IThreadStack stack = snapshot.getThreadStack(threadId);
+        if (stack == null) {
+            throw new IllegalArgumentException(
+                "no java.lang.Thread with objectId=" + threadId
+                + " — call /threads (no 'thread' param) to list threads and use the 'objectId' field");
+        }
+        IStackFrame[] frames = stack.getStackFrames();
+        if (frames == null) {
+            throw new IllegalArgumentException("thread " + threadId + " has no stack frames");
+        }
+        if (frameIdx < 0 || frameIdx >= frames.length) {
+            throw new IllegalArgumentException(
+                "frame index " + frameIdx + " out of range (thread " + threadId
+                + " has " + frames.length + " frames)");
+        }
         Json rows = Json.arr();
-        if (stack != null && stack.getStackFrames() != null) {
-            IStackFrame[] frames = stack.getStackFrames();
-            if (frameIdx >= 0 && frameIdx < frames.length) {
-                int[] locals = frames[frameIdx].getLocalObjectsIds();
-                if (locals != null) {
-                    for (int lid : locals) {
-                        rows.item(ObjectRows.row(snapshot, lid));
-                    }
-                }
+        int[] locals = frames[frameIdx].getLocalObjectsIds();
+        if (locals != null) {
+            for (int lid : locals) {
+                rows.item(ObjectRows.row(snapshot, lid));
             }
         }
         return Json.obj().kv("threadId", threadId).kv("frameIdx", frameIdx)

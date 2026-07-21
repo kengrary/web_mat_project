@@ -32,10 +32,12 @@ final class Query {
     }
 
     /**
-     * 把外部输入解析成 MAT 内部 int objectId。允许十进制、{@code 0x...} 前缀 hex、
-     * 以及不带前缀的 8 字符以内 hex（MAT 报告里贴地址常见）。
-     * <p>失败抛 {@link IllegalArgumentException}（message 带原值），
-     * 由调用方决定 400 / 500；用于必填 ID 字段。{@link #intOr} 仍用于可选参数静默回退。*/
+     * 把外部输入解析成 MAT 内部 int objectId。允许十进制整数与 {@code 0x...} 前缀 hex。
+     * <p>失败抛 {@link IllegalArgumentException}（message 带原值 + 期望格式），
+     * 由调用方决定 400 / 500；用于必填 ID 字段。{@link #intOr} 仍用于可选参数静默回退。
+     * <p><b>变更</b>（0.1.0 → 0.2.0）：移除「≤8 字符裸 hex」分支。所有 ≤8 字符的纯数字输入
+     * （如 {@code "20"}、{@code "100"}）此前会被静默当 hex 解析（{@code "20"} → 32），
+     * 现统一走十进制。MAT 报告里的地址请带 {@code 0x} 前缀。*/
     static int parseObjectId(String s) {
         if (s == null) {
             throw new IllegalArgumentException("missing object id");
@@ -52,12 +54,11 @@ final class Query {
                 }
                 return (int) v;
             }
-            if (t.length() <= 8 && t.matches("[0-9a-fA-F]+")) {
-                return (int) Long.parseLong(t, 16);
-            }
             return Integer.parseInt(t);
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("invalid object id: " + s);
+            throw new IllegalArgumentException(
+                "invalid object id: " + s
+                + " (decimal integer expected; use '0x' prefix for hex)");
         }
     }
 

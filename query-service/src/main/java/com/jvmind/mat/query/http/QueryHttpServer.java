@@ -498,6 +498,9 @@ public final class QueryHttpServer {
         try (SnapshotManager.Lease lease = manager.acquire(dumpDir)) {
             String json = fn.apply(lease.snapshot());
             send(ex, 200, json);
+        } catch (IllegalArgumentException badInput) {
+            // 用户输入问题（bad objectId / frame index 等），不是 server fault → 400
+            send(ex, 400, err(badInput.getMessage()));
         } catch (IllegalStateException notReady) {
             // hprof/index 不在场（解析未完成或被删）
             send(ex, 409, err(notReady.getMessage()));

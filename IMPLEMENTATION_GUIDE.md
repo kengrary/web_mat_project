@@ -424,6 +424,15 @@ const HEAPDUMP_VIEWS = [
 - `🔗 Path to GC` → 切换到 Path2GC 视图，`object=该 objectId`
 - `📈 Histogram of` → 切换到 Histogram 视图，`objectSet=rs-xxx`（若当前有结果集）
 
+**字段表 `targetClass` 约定**（`fields[]` / `staticFields[]` 每一项恒定 emit）：
+
+| 值 | 含义 | 前端类型列渲染 |
+|---|---|---|
+| `"java.util.HashMap$Node"` 等非空字符串 | 后端从 `nr.getObject().getClazz().getName()` 拿到的完整类名 | 显示 `targetClass` |
+| `""`（空串） | 后端尝试过但拿不到（`nr.getObject()` 抛 / `getClazz()` 为 null / synthetic class） | fallback 到 `type` 字段（通常 `"ref"`） |
+
+> 隐式契约：`targetClass` 字段恒定存在，避免前端判空时与"字段缺失"混淆。同一约定未来可复用到其他"尝试过但失败"的字段（如 `targetSuperclass` 等）。
+
 ### 6.8 结果集复用（resultSetId）
 
 `POST /oql` / `/retained-set` / `/merge-paths` 返回 `resultSetId`。前端把它当"一批对象的句柄"：

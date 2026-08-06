@@ -10,6 +10,7 @@ import org.eclipse.mat.snapshot.model.IObject;
 import org.eclipse.mat.snapshot.model.IPrimitiveArray;
 import org.eclipse.mat.snapshot.model.IObjectArray;
 import org.eclipse.mat.snapshot.model.NamedReference;
+import org.eclipse.mat.snapshot.model.ObjectReference;
 
 import java.util.List;
 
@@ -127,13 +128,19 @@ public final class ObjectView {
         String valStr;
         boolean isRef = false;
         int refId = -1;
-        if (v instanceof NamedReference nr) {
+        String targetClass = null;
+        // 字段的引用值在 MAT 里是 ObjectReference 实例（NamedReference 是其子类，
+        // 主要用于 getOutboundReferences 路径）。Field.getValue() 返回的是 ObjectReference 形态。
+        if (v instanceof ObjectReference or) {
             isRef = true;
-            try { refId = nr.getObjectId(); } catch (Exception ignore) { }
-            // 引用类型：优先显示目标对象的"语义内容"（getClassSpecificName）——
-            // String/char[]/URL/Date 等直接看到内容（含中文/日文/emoji，UTF-8 正确输出）；
-            // 拿不到内容则退回引用名（类名 @ 地址）。
-            valStr = resolveRefValue(nr);
+            try { refId = or.getObjectId(); } catch (Exception ignore) { }
+            // 一次 getObject() 复用：既要 targetClass（Inspector 类型列），又要 valStr（语义内容）。
+            IObject target = null;
+            try { target = or.getObject(); } catch (Throwable ignore) { }
+            if (target != null && target.getClazz() != null) {
+                targetClass = target.getClazz().getName();
+            }
+            valStr = resolveRefValue(or, target);
         } else {
             // 基础类型：直接值。char 额外给码点更友好（如不可见字符）。
             valStr = formatPrimitive(f, v);
@@ -142,25 +149,23 @@ public final class ObjectView {
                 .kv("name", f.getName())
                 .kv("type", fieldType(f))   // 可读类型：ref / int / char / boolean ...
                 .kv("value", valStr)
-                .kv("isRef", isRef);
+                .kv("isRef", isRef)
+                .kv("targetClass", targetClass == null ? "" : targetClass);  // 空串 = 后端尝试过但拿不到
         if (isRef && refId >= 0) o.kv("refId", refId);   // 可点进去
         return o.endObj();
     }
 
-    /** 引用字段值：目标对象的语义内容（String 文本等），失败退回引用名。 */
-    private static String resolveRefValue(NamedReference nr) {
-        try {
-            IObject target = nr.getObject();
-            if (target != null) {
-                String semantic = target.getClassSpecificName();   // String→文本, char[]→字符串, URL→完整URL
-                if (semantic != null && !semantic.isEmpty()) {
-                    // String 等用引号包裹更直观；过长截断（保留 UTF-8 字符完整）
-                    String s = semantic.length() > 200 ? semantic.substring(0, 200) + "…" : semantic;
-                    return "\"" + s + "\"";
-                }
+    /** 引用字段值：目标对象的语义内容（String 文本等），失败退回地址。 */
+    private static String resolveRefValue(ObjectReference or, IObject target) {
+        if (target != null) {
+            String semantic = target.getClassSpecificName();   // String→文本, char[]→字符串, URL→完整URL
+            if (semantic != null && !semantic.isEmpty()) {
+                // String 等用引号包裹更直观；过长截断（保留 UTF-8 字符完整）
+                String s = semantic.length() > 200 ? semantic.substring(0, 200) + "…" : semantic;
+                return "\"" + s + "\"";
             }
-        } catch (Throwable ignore) { }
-        return nr.getName();   // 退回 "java.lang.Foo @ 0x.."
+        }
+        return or.toString();   // ObjectReference.toString() = "0x..."（无类名，纯地址）
     }
 
     /** 基础类型值格式化：char 显示成 'A' (65)，其余直接 toString。 */

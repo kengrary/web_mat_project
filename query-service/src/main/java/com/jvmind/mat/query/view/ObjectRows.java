@@ -40,7 +40,7 @@ public final class ObjectRows {
     }
 
     /** displayName 偶尔会抛/慢，做兜底。 */
-    static String safeDisplayName(IObject o) {
+    public static String safeDisplayName(IObject o) {
         try {
             String n = o.getDisplayName();
             if (n != null && !n.isEmpty()) return n;

@@ -5,6 +5,7 @@ import com.jvmind.mat.query.core.ResultCache;
 import com.jvmind.mat.query.core.SnapshotManager;
 import com.jvmind.mat.query.model.Json;
 import com.jvmind.mat.query.view.HistogramView;
+import com.jvmind.mat.query.view.ObjectRows;
 import com.jvmind.mat.query.view.OverviewView;
 import com.jvmind.mat.query.view.DominatorView;
 import com.jvmind.mat.query.view.ThreadsView;
@@ -20,11 +21,14 @@ import com.jvmind.mat.query.view.PoolLeakView;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.eclipse.mat.snapshot.ISnapshot;
+import org.eclipse.mat.snapshot.model.IObject;
+import org.eclipse.mat.snapshot.model.NamedReference;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
@@ -104,6 +108,8 @@ public final class QueryHttpServer {
         ctx("/connection-pools", ex ->              // 连接池配置+统计（密码脱敏，识别主流池）
                 withSnapshot(ex, ConnectionPoolView::extract));
         ctx("/pool-leaks", this::poolLeaks);        // 连接池泄漏归因（借出超时连接+借出栈）
+        ctx("/list-objects", this::listObjects);   // 收集目标对象的出/入引用对象 id，返回 resultSetId
+        ctx("/references", this::references);    // 详细行：每个引用对象 + 字段名/大小（References 视图）
     }
 
     /**
@@ -234,6 +240,159 @@ public final class QueryHttpServer {
         }
         String dumpDir = q.get("dumpDir");
         withSnapshot(ex, s -> OqlView.execute(s, oql, limit, offset, view, sort, resultSets, dumpDir));
+    }
+
+    /** list_objects：?dumpDir=&direction=out|in&objectId=N 。返回 resultSetId。 */
+    private void listObjects(HttpExchange ex) throws IOException {
+        Map<String, String> q = Query.parse(ex);
+        String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        String direction = MiniJson.getString(body, "direction"); // "out" | "in"
+        long objectId = MiniJson.getLong(body, "objectId", -1);
+        String dumpDir = q.get("dumpDir");
+        if (objectId < 0) { send(ex, 400, err("missing 'objectId'")); return; }
+        if (dumpDir == null || dumpDir.isBlank()) { send(ex, 400, err("missing 'dumpDir' query param")); return; }
+        if (!"out".equalsIgnoreCase(direction) && !"in".equalsIgnoreCase(direction)) {
+            send(ex, 400, err("direction must be 'out' or 'in'"));
+            return;
+        }
+        final boolean outbound = "out".equalsIgnoreCase(direction);
+        withSnapshot(ex, s -> {
+            try {
+                int[] ids;
+                if (outbound) {
+                    // outbound: dedupe getOutboundReferences().getObjectId()
+                    IObject o = s.getObject((int) objectId);
+                    java.util.Set<Integer> set = new java.util.LinkedHashSet<>();
+                    List<NamedReference> refs = o.getOutboundReferences();
+                    if (refs != null) {
+                        for (NamedReference nr : refs) {
+                            try {
+                                int cid = nr.getObjectId();
+                                if (cid >= 0) set.add(cid);
+                            } catch (Exception ignore) { }
+                        }
+                    }
+                    ids = set.stream().mapToInt(Integer::intValue).toArray();
+                } else {
+                    ids = s.getInboundRefererIds((int) objectId);
+                    if (ids == null) ids = new int[0];
+                }
+                String rsId = resultSets.put(dumpDir, ids);
+                return Json.obj()
+                        .kv("resultSetId", rsId)
+                        .kv("count", ids.length)
+                        .endObj();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    /** references：收集目标对象的出/入引用对象，返回详细行（含字段名/大小）。
+     *  body: {"direction":"out"|"in", "objectId":N}
+     *  query: dumpDir, top, offset
+     */
+    private void references(HttpExchange ex) throws IOException {
+        Map<String, String> q = Query.parse(ex);
+        String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        String direction = MiniJson.getString(body, "direction");   // "out" | "in"
+        int objectId = (int) MiniJson.getLong(body, "objectId", -1);
+        String dumpDir = q.get("dumpDir");
+        int top = Query.intOr(q, "top", 50);
+        int offset = Query.intOr(q, "offset", 0);
+
+        if (objectId < 0) { send(ex, 400, err("missing 'objectId' in body")); return; }
+        if (dumpDir == null || dumpDir.isBlank()) { send(ex, 400, err("missing 'dumpDir' query param")); return; }
+        if (!"out".equalsIgnoreCase(direction) && !"in".equalsIgnoreCase(direction)) {
+            send(ex, 400, err("direction must be 'out' or 'in'")); return;
+        }
+
+        withSnapshot(ex, s -> {
+            try {
+                // 构建 "objectId -> fieldName" 映射
+                java.util.LinkedHashMap<Integer, String> fieldNames = new java.util.LinkedHashMap<>();
+                java.util.List<Integer> order = new java.util.ArrayList<>();
+
+                if ("out".equalsIgnoreCase(direction)) {
+                    IObject o = s.getObject(objectId);
+                    java.util.List<NamedReference> refs = o.getOutboundReferences();
+                    if (refs != null) {
+                        for (NamedReference nr : refs) {
+                            try {
+                                int cid = nr.getObjectId();
+                                if (cid >= 0 && !fieldNames.containsKey(cid)) {
+                                    fieldNames.put(cid, nr.getName());   // 字段名（如 "table" / "[7]"）
+                                    order.add(cid);
+                                }
+                            } catch (Exception ignore) { }
+                        }
+                    }
+                } else {
+                    // inbound：getInboundRefererIds 拿 referer ids，再反向查它指向我们的字段名
+                    int[] referers = s.getInboundRefererIds(objectId);
+                    if (referers != null) {
+                        for (int rid : referers) {
+                            if (fieldNames.containsKey(rid)) continue;
+                            String fn = reverseFieldName(s, rid, objectId);
+                            fieldNames.put(rid, fn);
+                            order.add(rid);
+                        }
+                    }
+                }
+
+                // 分页 + 渲染
+                int total = order.size();
+                int from = Math.min(offset, total);
+                int to = Math.min(offset + top, total);
+
+                Json rows = Json.arr();
+                for (int i = from; i < to; i++) {
+                    int id = order.get(i);
+                    IObject obj = s.getObject(id);
+                    long shallow = obj.getUsedHeapSize();
+                    long retained = 0;
+                    try { retained = Math.abs(obj.getRetainedHeapSize()); } catch (Exception ignore) { }
+                    rows.item(Json.obj()
+                            .kv("objectId", id)
+                            .kv("label", ObjectRows.safeDisplayName(obj))
+                            .kv("className", obj.getClazz() != null ? obj.getClazz().getName() : "?")
+                            .kv("fieldName", fieldNames.getOrDefault(id, ""))
+                            .kv("shallowBytes", shallow)
+                            .kv("shallow", Json.humanBytes(shallow))
+                            .kv("retainedBytes", retained)
+                            .kv("retained", retained > 0 ? Json.humanBytes(retained) : "n/a")
+                            .endObj());
+                }
+
+                Json out = Json.obj()
+                        .kv("kind", "object-list")
+                        .kv("direction", direction)
+                        .kv("source", objectId)
+                        .raw("rows", rows.endArr())
+                        .kv("totalRows", total)
+                        .kv("returned", to - from);
+                if (to < total) out.kv("cursor", "offset:" + to);
+                return out.endObj();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    /** inbound 用：找 referer 的 outbound refs 里指向 targetId 的那条的字段名。找不到返回 "". */
+    private static String reverseFieldName(ISnapshot s, int refererId, int targetId) {
+        try {
+            IObject referer = s.getObject(refererId);
+            java.util.List<NamedReference> refs = referer.getOutboundReferences();
+            if (refs != null) {
+                for (NamedReference nr : refs) {
+                    try {
+                        if (nr.getObjectId() == targetId) return nr.getName();
+                    } catch (Exception ignore) { }
+                }
+            }
+        } catch (Exception ignore) { }
+        return "";
     }
 
     /** path2gc：?dumpDir=&object=<id>&excludeWeakSoft=true 。单对象通常快，同步返回。 */

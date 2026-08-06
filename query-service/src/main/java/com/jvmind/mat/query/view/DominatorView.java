@@ -3,8 +3,12 @@ package com.jvmind.mat.query.view;
 import com.jvmind.mat.query.model.Json;
 import org.eclipse.mat.snapshot.ISnapshot;
 import org.eclipse.mat.snapshot.model.IObject;
+import org.eclipse.mat.snapshot.model.NamedReference;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 支配树视图 —— 对象级，逐层懒加载（文档 06 §3.2 模式 A）。
@@ -41,6 +45,8 @@ public final class DominatorView {
 
         int[] childIds = snapshot.getImmediateDominatedIds(parentId);
 
+        Map<Integer, String> fieldNames = buildFieldNameMap(snapshot, parentId);
+
         // 按 retained 降序（retained 是 O(1) 查表，排序整层是廉价的）
         Integer[] boxed = box(childIds);
         Arrays.sort(boxed, (a, b) -> Long.compare(retained(snapshot, b), retained(snapshot, a)));
@@ -62,6 +68,7 @@ public final class DominatorView {
             rows.item(Json.obj()
                     .kv("objectId", id)
                     .kv("id", id)
+                    .kv("fieldName", fieldNames.getOrDefault(id, ""))
                     .kv("label", ObjectRows.safeDisplayName(o))
                     .kv("className", o.getClazz() != null ? o.getClazz().getName() : "?")
                     .kv("type", o.getClazz() != null ? o.getClazz().getName() : "?")
@@ -84,6 +91,24 @@ public final class DominatorView {
             out.kv("cursor", "offset:" + to);
         }
         return out.endObj();
+    }
+
+    private static Map<Integer, String> buildFieldNameMap(ISnapshot s, int parentId) {
+        Map<Integer, String> map = new HashMap<>();
+        if (parentId == -1) return map;
+        try {
+            IObject parent = s.getObject(parentId);
+            List<NamedReference> refs = parent.getOutboundReferences();
+            if (refs != null) {
+                for (NamedReference r : refs) {
+                    try {
+                        int cid = r.getObjectId();
+                        if (cid >= 0) map.putIfAbsent(cid, r.getName());
+                    } catch (Exception ignore) { }
+                }
+            }
+        } catch (Exception ignore) { }
+        return map;
     }
 
     private static long retained(ISnapshot s, int id) {

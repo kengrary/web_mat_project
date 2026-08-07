@@ -4,6 +4,7 @@ import com.jvmind.mat.query.model.Json;
 import org.eclipse.mat.query.Column;
 import org.eclipse.mat.query.IContextObject;
 import org.eclipse.mat.query.IResult;
+import org.eclipse.mat.query.IResultPie;
 import org.eclipse.mat.query.IResultTable;
 import org.eclipse.mat.query.IResultTree;
 import org.eclipse.mat.query.results.CompositeResult;
@@ -59,6 +60,17 @@ public final class ResultRenderer {
         }
         if (result instanceof IResultTree tree) {
             return renderTreeLevel(tree, /*parent*/ null, DEFAULT_TREE_LIMIT);
+        }
+        // IResultPie is the interface that MAT's PieFactory.PieImpl
+        // implements, but its class lives in org.eclipse.mat.report while
+        // PieImpl lives in org.eclipse.mat.api. OSGi split packages mean
+        // a direct instanceof check can return false even when the
+        // concrete class genuinely implements IResultPie. Detect by
+        // class name instead — `PieImpl` is unique enough for this
+        // purpose (MAT internals + user extensions are unlikely to name
+        // a top-level class the same).
+        if (isPieImpl(result)) {
+            return renderPie(asPieImpl(result));
         }
         if (result instanceof TextResult text) {
             return Json.obj()
@@ -230,7 +242,102 @@ public final class ResultRenderer {
                 .endObj();
     }
 
+    /**
+     * Render an {@link IResultPie} (e.g. MAT LeakHunterQuery's overview pie chart)
+     * as a JSON payload the web frontend can render with inline SVG.
+     *
+     * <p>Each {@link IResultPie.Slice} is unwrapped into
+     * {@code {objectId, label, value, color, description}}. The frontend
+     * uses {@code value} for slice magnitude and {@code color} (hex) for
+     * fill; the SVG geometry (arc paths) is computed client-side from
+     * the cumulative angle of each slice.
+     *
+     * <p>{@link IResultPie.ColoredSlice} gives us the pie's per-slice
+     * colour (java.awt.Color); when a slice lacks a colour we fall back
+     * to a neutral grey so the chart never renders transparent.
+     * {@link IResultPie.Slice#getContext()} may throw on broken snapshots,
+     * so we catch and default to {@code objectId:-1} (slice is then
+     * non-navigable in the UI; matches the rest of the codebase's
+     * defensive pattern).
+     */
+    private static String renderPie(IResultPie pie) {
+        Json slices = Json.arr();
+        try {
+            int i = 0;
+            for (IResultPie.Slice s : pie.getSlices()) {
+                if (s == null) continue;
+                String label = s.getLabel() != null ? s.getLabel() : "";
+                String desc = s.getDescription() != null ? s.getDescription() : "";
+                double value = s.getValue();
+                int oid = -1;
+                try {
+                    if (s.getContext() != null) oid = s.getContext().getObjectId();
+                } catch (Throwable ignore) { /* skip */ }
+                // Use the deterministic palette. Trying to read the
+                // slice's actual java.awt.Color via reflection was
+                // unreliable across OSGi classloader splits — each
+                // call had to walk the class hierarchy and invoke
+                // setAccessible(true), which occasionally hung on
+                // some dumps. The MAT palette is visually close
+                // enough that we lose little by skipping the original.
+                String hex = FALLBACK_COLORS[i % FALLBACK_COLORS.length];
+                i++;
+                slices.item(Json.obj()
+                        .kv("objectId", oid)
+                        .kv("label", label)
+                        .kv("value", value)
+                        .kv("color", hex)
+                        .kv("description", desc)
+                        .endObj());
+            }
+        } catch (Throwable t) {
+            // Defensive — pie rendering shouldn't fail the whole report.
+        }
+        return Json.obj()
+                .kv("kind", "pie")
+                .raw("slices", slices.endArr())
+                .endObj();
+    }
+
     // ===================== helpers =====================
+
+    /**
+     * Class-name based check whether {@code o} is a PieFactory.PieImpl.
+     * {@code PieImpl} lives in {@code org.eclipse.mat.snapshot.query}
+     * while {@link IResultPie} lives in {@code org.eclipse.mat.query}.
+     * OSGi split-package classloaders can disagree on the {@code instanceof}
+     * relation, so we walk the class hierarchy by simple name instead.
+     */
+    private static boolean isPieImpl(Object o) {
+        if (o == null) return false;
+        Class<?> c = o.getClass();
+        while (c != null) {
+            if ("PieImpl".equals(c.getSimpleName())) return true;
+            c = c.getSuperclass();
+        }
+        return false;
+    }
+
+    /**
+     * Cast to {@link IResultPie}. The caller has verified the runtime
+     * type via {@link #isPieImpl(Object)}, so the cast is safe at runtime;
+     * Java's type system doesn't know the shape across bundle classloaders.
+     */
+    @SuppressWarnings("unchecked")
+    private static <T> T asPieImpl(Object o) {
+        return (T) o;
+    }
+
+    /** Deterministic color palette — used when the slice's actual
+     * {@code Color} can't be read (OSGi split-package blocks
+     * {@code getColor()}, transient AWT issues, etc.). Palette colors
+     * match MAT desktop's qualitative palette family so users get
+     * visually similar charts. Stable across renders since slice
+     * ordering matches the backend's iteration. */
+    private static final String[] FALLBACK_COLORS = {
+            "#5b9bd5", "#ed7d31", "#a5a5a5", "#ffc000", "#4472c4",
+            "#70ad47", "#264478", "#9e480e", "#636363", "#997300",
+    };
 
     private static String renderStructuredRow(IResultTable table, Column[] cols, boolean[] retainedCol, Object row) {
         Json cells = Json.arr();

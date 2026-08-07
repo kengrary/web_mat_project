@@ -75,6 +75,14 @@ public final class ObjectView {
             j.kv("kind", "primitiveArray");
             j.kv("length", pa.getLength());
             j.raw("elements", renderPrimitiveArray(pa));
+            // byte[] 给解码预览（对齐 MAT ByteArrayResolver）：可读字符串
+            if (isByteArray(pa)) {
+                String decoded = resolveByteArray(pa);
+                if (decoded != null) {
+                    String s = decoded.length() > 200 ? decoded.substring(0, 200) + "…" : decoded;
+                    j.kv("value", "\"" + esc(s) + "\"");
+                }
+            }
         } else if (o instanceof IObjectArray oa) {
             // 对象数组：长度（元素引用见 outbound）
             j.kv("kind", "objectArray");
@@ -164,8 +172,50 @@ public final class ObjectView {
                 String s = semantic.length() > 200 ? semantic.substring(0, 200) + "…" : semantic;
                 return "\"" + s + "\"";
             }
+            // byte[]：getClassSpecificName 命中不了默认 resolver，用自定义解码
+            // （对齐 MAT CommonNameResolver$ByteArrayResolver）
+            if (target instanceof IPrimitiveArray pa && isByteArray(pa)) {
+                String decoded = resolveByteArray(pa);
+                if (decoded != null && !decoded.isEmpty()) {
+                    String s = decoded.length() > 200 ? decoded.substring(0, 200) + "…" : decoded;
+                    return "\"" + esc(s) + "\"";
+                }
+            }
         }
         return or.toString();   // ObjectReference.toString() = "0x..."（无类名，纯地址）
+    }
+
+    /** IPrimitiveArray 是否 byte[]：getComponentType() == byte.class。 */
+    private static boolean isByteArray(IPrimitiveArray pa) {
+        try {
+            Class<?> c = pa.getComponentType();
+            return c != null && c == byte.class;
+        } catch (Throwable ignore) {
+            return false;
+        }
+    }
+
+    /** byte[] 转可读字符串（对齐 MAT ByteArrayResolver）：
+     *  取前 1024 字节、跳过前导 0、可打印 ASCII 保留、其余 '.'。全 0 返回 null。 */
+    private static String resolveByteArray(IPrimitiveArray pa) {
+        try {
+            int len = pa.getLength();
+            if (len <= 0) return null;
+            int n = Math.min(len, 1024);
+            Object arr = pa.getValueArray(0, n);
+            if (!(arr instanceof byte[] bytes)) return null;
+            int i = 0;
+            while (i < bytes.length && bytes[i] == 0) i++;   // 跳过前导 0
+            if (i >= bytes.length) return null;               // 全 0
+            StringBuilder sb = new StringBuilder(bytes.length - i);
+            for (; i < bytes.length; i++) {
+                int b = bytes[i] & 0xFF;
+                sb.append((b >= 32 && b <= 126) ? (char) b : '.');
+            }
+            return sb.toString();
+        } catch (Throwable ignore) {
+            return null;
+        }
     }
 
     /** 基础类型值格式化：char 显示成 'A' (65)，其余直接 toString。 */

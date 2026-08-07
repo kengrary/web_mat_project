@@ -13,6 +13,8 @@ import com.jvmind.mat.query.view.OqlView;
 import com.jvmind.mat.query.view.DiagnosticsView;
 import com.jvmind.mat.query.view.ToolsView;
 import com.jvmind.mat.query.view.ObjectView;
+import com.jvmind.mat.query.view.ArrayElementsView;
+import com.jvmind.mat.query.view.CollectionEntriesView;
 import com.jvmind.mat.query.view.ThreadLocalsView;
 import com.jvmind.mat.query.view.SqlExtractor;
 import com.jvmind.mat.query.view.OomDiagnosis;
@@ -109,6 +111,8 @@ public final class QueryHttpServer {
                 withSnapshot(ex, ConnectionPoolView::extract));
         ctx("/pool-leaks", this::poolLeaks);        // 连接池泄漏归因（借出超时连接+借出栈）
         ctx("/list-objects", this::listObjects);   // 收集目标对象的出/入引用对象 id，返回 resultSetId
+        ctx("/array-elements", this::arrayElements);   // Object[] 元素列表（分页）
+        ctx("/collection-entries", this::collectionEntries); // Map/Collection 实例条目（分页）
         ctx("/references", this::references);    // 详细行：每个引用对象 + 字段名/大小（References 视图）
     }
 
@@ -456,6 +460,28 @@ public final class QueryHttpServer {
         int id = Query.intOr(q, "id", -1);
         if (id < 0) { send(ex, 400, err("missing 'id'")); return; }
         withSnapshot(ex, s -> ObjectView.detail(s, id));
+    }
+
+    /** 对象数组元素列表：?id=<objectId>&top=&offset= 。分页。 */
+    private void arrayElements(HttpExchange ex) throws IOException {
+        Map<String, String> q = Query.parse(ex);
+        int id = Query.intOr(q, "id", -1);
+        if (id < 0) { send(ex, 400, err("missing 'id'")); return; }
+        int top = Query.intOr(q, "top", 25);
+        int offset = Query.intOr(q, "offset", 0);
+        final int fid = id, ftop = top, foffset = offset;
+        withSnapshot(ex, s -> ArrayElementsView.elements(s, fid, ftop, foffset));
+    }
+
+    /** Map / Collection 实例条目：?id=<objectId>&top=&offset= 。分页。 */
+    private void collectionEntries(HttpExchange ex) throws IOException {
+        Map<String, String> q = Query.parse(ex);
+        int id = Query.intOr(q, "id", -1);
+        if (id < 0) { send(ex, 400, err("missing 'id'")); return; }
+        int top = Query.intOr(q, "top", 25);
+        int offset = Query.intOr(q, "offset", 0);
+        final int fid = id, ftop = top, foffset = offset;
+        withSnapshot(ex, s -> CollectionEntriesView.entries(s, fid, ftop, foffset));
     }
 
     /** leak-suspects：重操作 → 异步任务，立即返回 taskId。 */

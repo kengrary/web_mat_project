@@ -1,6 +1,9 @@
 package com.jvmind.mat.query.view;
 
 import com.jvmind.mat.query.model.Json;
+import org.eclipse.mat.inspections.collectionextract.CollectionExtractionUtils;
+import org.eclipse.mat.inspections.collectionextract.ICollectionExtractor;
+import org.eclipse.mat.inspections.collectionextract.IMapExtractor;
 import org.eclipse.mat.snapshot.ISnapshot;
 import org.eclipse.mat.snapshot.model.Field;
 import org.eclipse.mat.snapshot.model.GCRootInfo;
@@ -70,6 +73,9 @@ public final class ObjectView {
                 IClass c = inst.getClazz();
                 if (c != null) j.raw("staticFields", renderFieldList(c.getStaticFields()));
             } catch (Throwable ignore) { }
+            // 容器检测：Map / Collection 实例走 CollectionExtractionUtils，
+            // 前端据此显示 "entries / elements" 区块（而非内部字段）。
+            markCollectionFlags(o, j);
         } else if (o instanceof IPrimitiveArray pa) {
             // 基本类型数组：长度 + 前若干元素值
             j.kv("kind", "primitiveArray");
@@ -84,9 +90,10 @@ public final class ObjectView {
                 }
             }
         } else if (o instanceof IObjectArray oa) {
-            // 对象数组：长度（元素引用见 outbound）
+            // 对象数组：长度 + 是否有元素（前端据此显示 elements 区块）
             j.kv("kind", "objectArray");
             j.kv("length", oa.getLength());
+            j.kv("hasArrayElements", oa.getLength() > 0);
         }
 
         // ---- 出引用（getOutboundReferences）----
@@ -289,5 +296,21 @@ public final class ObjectView {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /** 容器检测：Map / Collection 实例标记 hasCollection + isMap + size。
+     *  前端据此决定显示 "entries/elements" 区块（对齐 MAT）。 */
+    private static void markCollectionFlags(IObject o, Json j) {
+        try {
+            ICollectionExtractor ext = CollectionExtractionUtils.findCollectionExtractor(o);
+            if (ext == null) return;
+            j.kv("hasCollection", true);
+            boolean isMap = ext instanceof IMapExtractor;
+            j.kv("isMap", isMap);
+            try {
+                Integer size = ext.getSize(o);
+                if (size != null) j.kv("size", size);
+            } catch (Throwable ignore) { }
+        } catch (Throwable ignore) { }
     }
 }

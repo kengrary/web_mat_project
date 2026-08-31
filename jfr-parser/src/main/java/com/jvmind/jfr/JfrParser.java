@@ -28,7 +28,10 @@ import jdk.jfr.consumer.RecordingFile;
  * <ol>
  *   <li>建表（stack_traces / hotspots / recording_meta），关自动提交；</li>
  *   <li>RecordingFile 单次流式遍历，内存级聚合：
- *       {@code jdk.ObjectAllocationSample} → MEM_ALLOC（weight=分配字节），
+ *       {@code jdk.ObjectAllocationSample}（JDK16+）/
+ *       {@code jdk.ObjectAllocationInNewTLAB}（weight=tlabSize）/
+ *       {@code jdk.ObjectAllocationOutsideTLAB}（weight=objectSize）
+ *       → MEM_ALLOC（weight=分配字节），
  *       {@code jdk.ExecutionSample} → CPU_SAMPLE（weight=采样次数）；</li>
  *   <li>堆栈降维 processStack：反转帧序 → 过滤非业务前缀 → 取前 5 业务帧
  *       拼 "ClsA.m1 <- ClsB.m2" → MD5 作 stack_hash，完整堆栈存 JSON；</li>
@@ -106,9 +109,20 @@ public final class JfrParser {
                 }
                 String name = ev.getEventType().getName();
                 switch (name) {
+                    // JDK 16+: 采样事件（profile 档默认开启）
                     case "jdk.ObjectAllocationSample" -> {
                         memEvents++;
                         accumulate(ev, EV_MEM_ALLOC, ev.getLong("weight"), excludes);
+                    }
+                    // JDK 8-15: 逐对象分配事件；weight=allocationSize（对象真实字节数，
+                    // 非 tlabSize——那是整块 TLAB 容量，会导致聚合严重虚高）
+                    case "jdk.ObjectAllocationInNewTLAB" -> {
+                        memEvents++;
+                        accumulate(ev, EV_MEM_ALLOC, ev.getLong("allocationSize"), excludes);
+                    }
+                    case "jdk.ObjectAllocationOutsideTLAB" -> {
+                        memEvents++;
+                        accumulate(ev, EV_MEM_ALLOC, ev.getLong("allocationSize"), excludes);
                     }
                     case "jdk.ExecutionSample" -> {
                         cpuEvents++;
@@ -270,6 +284,13 @@ public final class JfrParser {
     }
 
     private void createTables(Connection conn) throws SQLException {
+        // 幂等重跑：目标文件已存在（如上次中途失败/旧版本产物）时清空旧数据，
+        // 否则 stack_traces 主键冲突导致 flush 失败。
+        try (Statement st = conn.createStatement()) {
+            st.execute("DROP TABLE IF EXISTS recording_meta");
+            st.execute("DROP TABLE IF EXISTS hotspots");
+            st.execute("DROP TABLE IF EXISTS stack_traces");
+        }
         try (Statement st = conn.createStatement()) {
             st.execute("""
                 CREATE TABLE IF NOT EXISTS stack_traces (

@@ -8,6 +8,7 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.Map;
 import jdk.jfr.consumer.RecordedClass;
 import jdk.jfr.consumer.RecordedEvent;
 import jdk.jfr.consumer.RecordedFrame;
+import jdk.jfr.consumer.RecordedMethod;
 import jdk.jfr.consumer.RecordedStackTrace;
 import jdk.jfr.consumer.RecordingFile;
 
@@ -67,6 +69,20 @@ public final class JfrParser {
 
     private record StackEntry(String topFrames, String fullFramesJson) { }
 
+    /** 堆栈身份缓存（memo）：key = 逐帧 (classId | methodNameHash | line) 的
+     * 64-bit 滚动哈希，命中（long[] 精确比对）直接复用 ProcessedStack；只有首个
+     * 出现才做完整降维。利用 JFR 类常量池 id（RecordedClass.getId()，JDK9+ 公有
+     * API，跨 CheckPoint 全录制稳定）当"字典 ID"，避免重复帧解析 / 字符串拼接 /
+     * full_frames JSON / MD5 —— 对应 spec 的「堆栈指纹缓存」。 */
+    private final Map<Long, List<CanonEntry>> stackCache = new HashMap<>();
+    /** 逐事件复用的身份键缓冲（按需扩容，热路径零分配）。 */
+    private long[] scratch = new long[64];
+    private long stackCacheHits;
+    private long stackCacheMisses;
+
+    /** 规范化身份键（与 scratch 相同布局的 long[]）→ 已降维结果。ps 可为 null（无业务帧）。 */
+    private record CanonEntry(long[] key, ProcessedStack ps) { }
+
     public static void main(String[] args) {
         if (args.length != 2) {
             System.err.println("usage: java -jar jfr-parser.jar <input.jfr> <output.duckdb>");
@@ -109,20 +125,22 @@ public final class JfrParser {
                 }
                 String name = ev.getEventType().getName();
                 switch (name) {
-                    // JDK 16+: 采样事件（profile 档默认开启）
+                    // JDK 16+: 采样事件（profile 档默认开启），weight=tlabSize
                     case "jdk.ObjectAllocationSample" -> {
                         memEvents++;
                         accumulate(ev, EV_MEM_ALLOC, ev.getLong("weight"), excludes);
                     }
-                    // JDK 8-15: 逐对象分配事件；weight=allocationSize（对象真实字节数，
-                    // 非 tlabSize——那是整块 TLAB 容量，会导致聚合严重虚高）
+                    // JDK 8-15: 逐 TLAB 分配事件。分配量口径与 ObjectAllocationSample
+                    // 一致 —— NewTLAB 取 tlabSize（整块 TLAB，代表本次新分配的字节数，
+                    // JMC 分配视图同口径）；OutsideTLAB 取 objectSize。字段名跨 JDK
+                    // 版本有差异（objectSize/allocationSize），逐个尝试。
                     case "jdk.ObjectAllocationInNewTLAB" -> {
                         memEvents++;
-                        accumulate(ev, EV_MEM_ALLOC, ev.getLong("allocationSize"), excludes);
+                        accumulate(ev, EV_MEM_ALLOC, eventBytes(ev, "tlabSize", "allocationSize"), excludes);
                     }
                     case "jdk.ObjectAllocationOutsideTLAB" -> {
                         memEvents++;
-                        accumulate(ev, EV_MEM_ALLOC, ev.getLong("allocationSize"), excludes);
+                        accumulate(ev, EV_MEM_ALLOC, eventBytes(ev, "objectSize", "allocationSize"), excludes);
                     }
                     case "jdk.ExecutionSample" -> {
                         cpuEvents++;
@@ -138,12 +156,27 @@ public final class JfrParser {
         }
         System.out.println("[jfr-parser] OK total=" + totalEvents
                 + " mem=" + memEvents + " cpu=" + cpuEvents
-                + " unique_stacks=" + stacks.size());
+                + " unique_stacks=" + stacks.size()
+                + " stack_cache_hits=" + stackCacheHits
+                + " stack_cache_misses=" + stackCacheMisses);
     }
 
     // ------------------------------------------------------------------
     // 事件 → 内存聚合
     // ------------------------------------------------------------------
+
+    /** 依次尝试字段名取非负 long（跨 JDK 版本的字段命名差异容错）。 */
+    private static long eventBytes(RecordedEvent ev, String... names) {
+        for (String n : names) {
+            try {
+                long v = ev.getLong(n);
+                if (v > 0) return v;
+            } catch (IllegalArgumentException ignored) {
+                // 该 JDK 版本无此字段，尝试下一个
+            }
+        }
+        return 0L;
+    }
 
     private void accumulate(RecordedEvent ev, String type, long weight, List<String> excludes) {
         RecordedStackTrace st = ev.getStackTrace();
@@ -165,11 +198,58 @@ public final class JfrParser {
      * 方法）。反转成 root-first 后顺序过滤业务帧，取前 5 个作为指纹 ——
      * 即「业务入口路径」而非「叶子方法」，同一入口多次调用聚合到一行，
      * 大幅压缩行数且更符合"哪条业务链路在吃资源"的专家视角。
+     *
+     * <p>结果按「堆栈身份」memo（stackCache）：逐帧取 JFR 类常量池 id
+     * （RecordedClass.getId()）+ 方法名 hash + 行号，滚动 64-bit 哈希并用
+     * long[] 精确比对。相同堆栈的后续事件只付 O(帧数) 整数运算，跳过字符串
+     * 拼接 / 业务过滤 / full_frames JSON / MD5 —— 40K 分配事件若只有 ~3K
+     * 不同堆栈，处理量减少 90%+。
      */
     private ProcessedStack processStack(RecordedStackTrace st, List<String> excludes) {
         List<RecordedFrame> frames = st.getFrames();
         if (frames == null || frames.isEmpty()) return null;
 
+        // ---- 身份键（热路径，复用 scratch，零分配）。
+        // leaf-first 顺序即可 —— 键只需确定性，不依赖帧序（降维时再反转）。 ----
+        int n = frames.size();
+        if (scratch.length < n * 2) scratch = new long[n * 2]; // 每帧占 2 个 long
+        long h = 0x9e3779b97f4a7c15L; // splitmix 种子
+        int i = 0;
+        for (RecordedFrame f : frames) {
+            RecordedMethod m = frameMethod(f);
+            if (m == null) continue;
+            String name = m.getName();
+            if (name == null) continue; // 与降维跳过规则一致
+            RecordedClass c = m.getType();
+            if (c == null) continue;
+            scratch[i++] = c.getId();
+            scratch[i++] = ((long) name.hashCode() << 32) ^ (f.getLineNumber() & 0xffffffffL);
+            h ^= scratch[i - 2] ^ scratch[i - 1];
+            h *= 0x9e3779b97f4a7c15L;
+        }
+        if (i == 0) return null; // 无有效帧（与原逻辑一致）
+
+        List<CanonEntry> bucket = stackCache.get(h);
+        if (bucket != null) {
+            for (CanonEntry e : bucket) {
+                if (e.key.length == i && Arrays.equals(e.key, 0, i, scratch, 0, i)) {
+                    stackCacheHits++;
+                    return e.ps;
+                }
+            }
+        }
+        stackCacheMisses++;
+        ProcessedStack ps = computeProcessedStack(frames, excludes);
+        if (bucket == null) {
+            bucket = new ArrayList<>(1);
+            stackCache.put(h, bucket);
+        }
+        bucket.add(new CanonEntry(Arrays.copyOf(scratch, i), ps));
+        return ps;
+    }
+
+    /** 首个出现才执行的完整堆栈降维（full_frames JSON + 业务过滤 + join + MD5）。 */
+    private ProcessedStack computeProcessedStack(List<RecordedFrame> frames, List<String> excludes) {
         // 反转 → root-first
         List<RecordedFrame> ordered = new ArrayList<>(frames);
         java.util.Collections.reverse(ordered);
@@ -183,12 +263,12 @@ public final class JfrParser {
             String cls = frameClassName(f);
             String method = frameMethodName(f);
             if (cls == null || method == null) continue;
-            String dotted = cls.replace('/', '.');
-            // full_frames JSON（截断到 MAX_FULL_FRAMES，标记 truncated）
+            // full_frames JSON（截断到 MAX_FULL_FRAMES，标记 truncated）。
+            // 注：RecordedClass.getName() 已返回 dotted（内部已做 '/'→'.'），无需再 replace。
             if (written < MAX_FULL_FRAMES) {
                 if (!first) fullJson.append(",");
                 first = false;
-                fullJson.append("{\"method\":\"").append(esc(dotted)).append('#')
+                fullJson.append("{\"method\":\"").append(esc(cls)).append('#')
                         .append(esc(method)).append('"');
                 int line = f.getLineNumber();
                 if (line > 0) fullJson.append(",\"line\":").append(String.valueOf(line));
@@ -196,9 +276,9 @@ public final class JfrParser {
                 written++;
             }
             // 业务帧判定（合成帧一律跳过）
-            if (isBusiness(dotted, excludes)) {
+            if (isBusiness(cls, excludes)) {
                 if (business.size() < TOP_BUSINESS_FRAMES) {
-                    business.add(shortName(dotted) + "." + method);
+                    business.add(cls + "." + method);
                 }
             }
         }
@@ -237,27 +317,32 @@ public final class JfrParser {
         }
     }
 
-    /** com.foo.Bar -> c.f.Bar（保留包尾段+类名，指纹可读性 vs 长度折中）。 */
-    private static String shortName(String dotted) {
-        String[] parts = dotted.split("\\.");
-        if (parts.length <= 2) return dotted;
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < parts.length - 1; i++) sb.append(parts[i].charAt(0)).append('.');
-        sb.append(parts[parts.length - 1]);
-        return sb.toString();
+    /** 取帧方法（异常安全，供身份键构建）。 */
+    private static RecordedMethod frameMethod(RecordedFrame f) {
+        try {
+            return f.getMethod();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static final MessageDigest MD5_DIGEST = initMd5();
+
+    private static MessageDigest initMd5() {
+        try {
+            return MessageDigest.getInstance("MD5");
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
     }
 
     private static String md5(String s) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] d = md.digest(s.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder(32);
-            for (byte b : d) sb.append(Character.forDigit((b >> 4) & 0xf, 16))
-                               .append(Character.forDigit(b & 0xf, 16));
-            return sb.toString();
-        } catch (Exception e) {
-            throw new IllegalStateException("MD5 unavailable", e);
-        }
+        // digest(byte[]) 是单次调用且自带 reset，可安全复用同一实例
+        byte[] d = MD5_DIGEST.digest(s.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        StringBuilder sb = new StringBuilder(32);
+        for (byte b : d) sb.append(Character.forDigit((b >> 4) & 0xf, 16))
+                           .append(Character.forDigit(b & 0xf, 16));
+        return sb.toString();
     }
 
     private static String esc(String s) {

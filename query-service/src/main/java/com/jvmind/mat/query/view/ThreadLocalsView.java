@@ -60,15 +60,34 @@ public final class ThreadLocalsView {
         Map<Integer, List<TL>> byT = new LinkedHashMap<>();
         for (TL t : all) byT.computeIfAbsent(t.threadId(), k -> new ArrayList<>()).add(t);
 
+        // 计算每个线程的 retained 汇总，按 totalRetained 降序，只保留 top 个线程。
+        // 不截断的话，大 dump 会把所有线程的所有 TL 值全量序列化（几万行），
+        // 响应慢且前端渲染卡死（'一直加载中'）。和 byValueClass 一样必须尊重 top。
+        List<Map.Entry<Integer, List<TL>>> ordered = new ArrayList<>(byT.entrySet());
+        List<long[]> totals = new ArrayList<>(ordered.size());   // per-entry [retainedSum]
+        for (var e : ordered) {
+            long sum = 0;
+            for (TL t : e.getValue()) {
+                IObject v = snapshot.getObject(t.valueId());
+                sum += v.getRetainedHeapSize();
+            }
+            totals.add(new long[]{sum});
+        }
+        // stable sort desc by retained
+        Integer[] idx = new Integer[ordered.size()];
+        for (int i = 0; i < idx.length; i++) idx[i] = i;
+        java.util.Arrays.sort(idx, (a, b) -> Long.compare(totals.get(b)[0], totals.get(a)[0]));
+        int n = Math.min(idx.length, Math.max(top, 1));
+
         Json threads = Json.arr();
-        for (var e : byT.entrySet()) {
+        for (int k = 0; k < n; k++) {
+            var e = ordered.get(idx[k]);
             List<TL> list = e.getValue();
-            long totalRetained = 0;
+            long totalRetained = totals.get(idx[k])[0];
             Json vals = Json.arr();
             for (TL t : list) {
                 IObject v = snapshot.getObject(t.valueId());
                 long ret = v.getRetainedHeapSize();
-                totalRetained += ret;
                 vals.item(Json.obj()
                         .kv("objectId", t.valueId())
                         .kv("label", ObjectRows.safeDisplayName(v))
@@ -89,6 +108,8 @@ public final class ThreadLocalsView {
         return Json.obj()
                 .kv("groupBy", "thread")
                 .kv("totalThreadLocals", all.size())
+                .kv("totalThreads", byT.size())
+                .kv("returnedThreads", n)
                 .raw("threads", threads.endArr())
                 .endObj();
     }

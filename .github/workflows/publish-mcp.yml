@@ -1,0 +1,59 @@
+name: publish-mcp
+
+on:
+  push:
+    tags:
+      - "mcp-v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    defaults:
+      run:
+        working-directory: mcp-server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check version
+        run: |
+          VERSION="${GITHUB_REF_NAME#mcp-v}"
+          python - "$VERSION" <<'PY'
+          import json
+          import pathlib
+          import sys
+          import tomllib
+
+          version = sys.argv[1]
+          pyproject = tomllib.loads(pathlib.Path("pyproject.toml").read_text())
+          server = json.loads(pathlib.Path("server.json").read_text())
+          init = pathlib.Path("src/jvmind_mat_mcp/__init__.py").read_text()
+          assert pyproject["project"]["version"] == version, pyproject["project"]["version"]
+          assert server["version"] == version, server["version"]
+          assert server["packages"][0]["version"] == version
+          assert f'__version__ = "{version}"' in init
+          PY
+      - name: Build
+        run: |
+          pip install build twine
+          python -m build
+          python -m twine check dist/*
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+      - name: Validate server.json
+        run: ./mcp-publisher validate
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: mcp-server/dist
+      - name: Publish to MCP Registry
+        run: |
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish

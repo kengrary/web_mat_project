@@ -43,3 +43,10 @@ data/
 *.hprof.*
 *.index
 *.threads
+
+# Vendored query-service bundle (needed inside the published wheel)
+!mcp-server/src/jvmind_mat_mcp/vendor/*.jar
+
+# MCP server build artifacts
+mcp-server/dist/
+mcp-server/build/

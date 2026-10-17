@@ -14,6 +14,7 @@
 3. **是 Python 团队、要接手开发** → [TODO-PYTHON-TEAM.md](./TODO-PYTHON-TEAM.md)（任务清单 + 接口契约 + 验收）。
 4. **想把查询服务跑起来** → [query-service/DEPLOY.md](./query-service/DEPLOY.md)（部署 + curl 验证）。
 5. **想跑通解析** → [parser-cli/v1-parsehd/README.md](./parser-cli/v1-parsehd/README.md)（零编译，发行版即可）。
+6. **想在 Claude/Cursor/VS Code 里分析堆转储** → [mcp-server/README.md](./mcp-server/README.md)（`uvx jvmind-mat-mcp`，本地 stdio）。
 
 ---
 
@@ -84,12 +85,13 @@
 
 ---
 
-## 三个模块速查
+## 模块速查
 
 | 模块 | 形态 | 状态 | 关键入口文件 |
 |---|---|---|---|
 | **parser-cli** | V1=发行版命令；V2=独立 jar | ✅ V1 实测可用 | `v1-parsehd/mat_parse_runner.py` |
 | **query-service** | OSGi bundle (HTTP :8090) | ✅ 已跑通+实测 | `QueryServiceApp.java` / `QueryHttpServer.java` |
+| **mcp-server** | Python stdio MCP（PyPI + 官方 Registry） | ✅ v0.1.0 实测可用 | `src/jvmind_mat_mcp/server.py` |
 | **Python 串通** | FastAPI + DB + agent | ⏳ 待开发 | 见 `TODO-PYTHON-TEAM.md` |
 
 ---

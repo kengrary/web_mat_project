@@ -1,0 +1,31 @@
+name: mcp-ci
+
+on:
+  push:
+    paths:
+      - "mcp-server/**"
+      - ".github/workflows/mcp-ci.yml"
+  pull_request:
+    paths:
+      - "mcp-server/**"
+      - ".github/workflows/mcp-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp-server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify vendored bundle
+        run: |
+          test -f src/jvmind_mat_mcp/vendor/com.jvmind.mat.query-0.1.0.jar
+          python -c "import zipfile; zipfile.ZipFile('src/jvmind_mat_mcp/vendor/com.jvmind.mat.query-0.1.0.jar').testzip()"
+      - run: pip install -e '.[dev]'
+      - run: ruff check src tests
+      - run: ruff format --check src tests
+      - run: pytest -q

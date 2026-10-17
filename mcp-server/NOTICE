@@ -1,0 +1,10 @@
+JVMind MAT MCP Server
+
+This package installs a small OSGi bundle into an existing Eclipse MAT
+installation. It does not redistribute Eclipse MAT itself.
+
+Eclipse MAT is licensed under the Eclipse Public License 2.0:
+https://www.eclipse.org/legal/epl-2.0/
+
+The bundled com.jvmind.mat.query jar is built from the query-service module of
+this repository.

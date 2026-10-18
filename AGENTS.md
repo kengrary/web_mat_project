@@ -7,6 +7,7 @@ JVMind × Eclipse MAT heapdump-analysis module. Companion Python/FastAPI workspa
 - `query-service/` — primary code. OSGi bundle (`com.jvmind.mat.query`) that runs inside a local Eclipse MAT 1.17 install and exposes JSON HTTP endpoints on `:8090`. **This is where 99% of edits happen.**
 - `parser-cli/` — hprof→MAT-index parser. V1 (production): `v1-parsehd/mat_parse_runner.py` shells out to MAT's `ParseHeapDump.sh` (zero Java build). V2 `src/` skeleton is unbuildable (MAT not on Maven Central); ignore unless actively working on it.
 - `mcp-server/` — Python stdio MCP server (`jvmind-mat-mcp`, PyPI + official MCP Registry) wrapping the query-service. Ships `com.jvmind.mat.query-<version>.jar` under `src/jvmind_mat_mcp/vendor/`; after any Java query-service change, rerun `mcp-server/scripts/vendor-bundle.sh`. Tests: `cd mcp-server && .venv/bin/pytest -q` (see README).
+- `marketplace/` — submission copy for Smithery/mcp.so/Glama/PulseMCP, plus the Smithery MCPB manifest. Build the bundle with `mcp-server/scripts/build-mcpb.sh`; see `marketplace/README.md` for platform requirements and the public-repo blocker.
 - `mat-study/` — 14 Chinese design docs (numbered `01-` … `14-`, skips `11`). Authoritative architecture/API rationale.
 - `web-prototype/` — single-file `index.html` vanilla-JS UI mock; no build, no deps.
 - `uploads/` — docs only (Java integration guide, old Vue refactor draft). **Not** a runtime upload directory.

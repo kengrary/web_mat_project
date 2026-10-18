@@ -1,0 +1,65 @@
+# mcp.so
+
+Submission page: <https://mcp.so/submit> → **MCP Server** tab.
+
+The free path is a manual review. A $39 one-time paid option publishes
+immediately with a verified badge and featured placement; not required.
+
+## Blocker
+
+The form requires a **public GitHub repository URL**. `kengrary/web_mat_project`
+is private today. See the visibility options in [`README.md`](./README.md).
+
+## Form values
+
+| Field | Value |
+|---|---|
+| Repository URL | `https://github.com/kengrary/web_mat_project` (after making it public) |
+| Name | `JVMind MAT Heap Dump Analyzer` |
+| Short description | `Analyze Java heap dumps locally with Eclipse MAT: histograms, dominators, threads, OQL, leak suspects, and OOM diagnosis.` |
+| Category | Developer Tools |
+| Tags | `mcp`, `heapdump`, `jvm`, `java`, `eclipse-mat`, `memory-leak`, `oom`, `debugging` |
+| Install | `uvx jvmind-mat-mcp` |
+| Homepage | `https://pypi.org/project/jvmind-mat-mcp/` |
+
+Long description:
+
+```markdown
+JVMind MAT runs Eclipse MAT on your machine and exposes heap analysis as MCP
+tools. Open a `.hprof` file, wait for background indexing, then inspect the heap
+overview, class histogram, dominator tree, thread stacks, ThreadLocals,
+individual objects, GC paths, OQL results, LeakHunter suspects, OOM diagnosis,
+connection pools, top consumers, and SQL in threads.
+
+Everything stays local: heap dumps never leave the machine, and the MAT helper
+binds to `127.0.0.1` only.
+
+**Requirements:** JDK 21 and Eclipse MAT 1.17.x. The server installs a small
+query bundle into MAT on first use.
+
+**Install:** `uvx jvmind-mat-mcp`
+```
+
+Client configuration to show on the listing:
+
+```json
+{
+  "mcpServers": {
+    "jvmind-mat": {
+      "command": "uvx",
+      "args": ["jvmind-mat-mcp"],
+      "env": {
+        "MAT_HOME": "/opt/mat",
+        "JVMIND_MAT_XMX": "8g"
+      }
+    }
+  }
+}
+```
+
+## Notes
+
+- Sign-in is required to submit.
+- A logo/icon is optional but improves the card. No icon is committed yet.
+- The listing should mention that analysis is local and requires MAT; this
+  avoids users expecting a hosted service.

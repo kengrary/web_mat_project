@@ -197,6 +197,14 @@ python -m twine check dist/*
 mcp-publisher validate
 ```
 
+Marketplace packs (Smithery MCPB, mcp.so/Glama/PulseMCP copy) live in
+[`../marketplace/README.md`](../marketplace/README.md). Build the Smithery
+bundle with:
+
+```bash
+mcp-server/scripts/build-mcpb.sh
+```
+
 ## License
 
 The MCP server code is part of the JVMind project. Eclipse MAT is licensed under

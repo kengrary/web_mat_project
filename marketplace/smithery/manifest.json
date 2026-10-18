@@ -1,0 +1,136 @@
+{
+  "manifest_version": "0.4",
+  "name": "jvmind-mat",
+  "display_name": "JVMind MAT Heap Dump Analyzer",
+  "version": "0.1.0",
+  "description": "Analyze Java heap dumps locally with Eclipse MAT: histograms, dominators, threads, OQL, leak suspects, and OOM diagnosis.",
+  "long_description": "JVMind MAT runs Eclipse MAT on your machine and exposes its analysis as MCP tools. Open a .hprof file, wait for indexing, then inspect the heap overview, class histogram, dominator tree, thread stacks, ThreadLocals, individual objects, GC paths, OQL results, LeakHunter suspects, OOM diagnosis, connection pools, top consumers, and SQL in threads.\n\nRequirements: JDK 21 and Eclipse MAT 1.17.x. The server installs a small query bundle into MAT on first use. Heap dumps stay on the local machine; the helper service binds to 127.0.0.1 only.",
+  "author": {
+    "name": "JVMind",
+    "url": "https://pypi.org/project/jvmind-mat-mcp/"
+  },
+  "homepage": "https://pypi.org/project/jvmind-mat-mcp/",
+  "documentation": "https://pypi.org/project/jvmind-mat-mcp/",
+  "server": {
+    "type": "uv",
+    "entry_point": "src/jvmind_mat_mcp/__main__.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "jvmind-mat-mcp"
+      ],
+      "env": {
+        "MAT_HOME": "${user_config.mat_home}",
+        "JVMIND_MAT_XMX": "${user_config.mat_xmx}"
+      }
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "linux",
+      "win32"
+    ],
+    "runtimes": {
+      "python": ">=3.10"
+    }
+  },
+  "user_config": {
+    "mat_home": {
+      "type": "directory",
+      "title": "Eclipse MAT home",
+      "description": "Directory containing plugins/ and configuration/ for Eclipse MAT 1.17.x. Leave empty to auto-detect.",
+      "required": false
+    },
+    "mat_xmx": {
+      "type": "string",
+      "title": "MAT heap size",
+      "description": "JVM heap for MAT parsing and queries, for example 8g. Defaults to 70% of physical RAM, minimum 4g.",
+      "required": false,
+      "default": "8g"
+    }
+  },
+  "tools": [
+    {
+      "name": "open_heapdump",
+      "description": "Open a local .hprof file and start background MAT indexing. Returns a report_id immediately."
+    },
+    {
+      "name": "get_heapdump_status",
+      "description": "Poll parsing status and progress for a heap dump report."
+    },
+    {
+      "name": "list_heapdumps",
+      "description": "List heap dumps known to this MCP server and their status."
+    },
+    {
+      "name": "close_heapdump",
+      "description": "Release a heap dump handle, optionally stopping the MAT helper process."
+    },
+    {
+      "name": "mat_overview",
+      "description": "Heap overview: used/committed/live heap, object/class/classloader counts, JDK version, leak suspect count."
+    },
+    {
+      "name": "mat_histogram",
+      "description": "Class histogram sorted by shallow, retained, or object count."
+    },
+    {
+      "name": "mat_dominator",
+      "description": "Dominator tree of the largest retained-heap objects, with drill-down by parent object id."
+    },
+    {
+      "name": "mat_threads",
+      "description": "List threads or drill into a thread's stack frames and frame locals."
+    },
+    {
+      "name": "mat_threadlocals",
+      "description": "Inspect ThreadLocal values grouped by value class or thread."
+    },
+    {
+      "name": "mat_object",
+      "description": "Inspect a single object: class, fields, references, and GC root."
+    },
+    {
+      "name": "mat_path2gc",
+      "description": "Shortest path from an object to a GC root."
+    },
+    {
+      "name": "mat_oql",
+      "description": "Run an OQL query and return rows plus a reusable result set id."
+    },
+    {
+      "name": "mat_leak_suspects",
+      "description": "Run LeakHunter and return leak suspects with retained sizes and descriptions."
+    },
+    {
+      "name": "mat_diagnose_oom",
+      "description": "Composite OOM diagnosis combining leak suspects, SQL in threads, and dominator analysis."
+    },
+    {
+      "name": "mat_connection_pools",
+      "description": "Diagnose database connection pools and connections held longer than a threshold."
+    },
+    {
+      "name": "mat_top_consumers",
+      "description": "Top memory consumers by retained heap."
+    },
+    {
+      "name": "mat_sql_in_threads",
+      "description": "Find SQL statements in thread stacks, useful for long-running queries at OOM."
+    }
+  ],
+  "keywords": [
+    "mcp",
+    "heapdump",
+    "jvm",
+    "java",
+    "eclipse-mat",
+    "memory-leak",
+    "oom",
+    "debugging"
+  ]
+}

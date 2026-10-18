@@ -42,8 +42,7 @@ npx --yes smithery mcp search jvmind-mat
 ## Notes
 
 - Smithery's “Get verified” checklist links the listing to the source
-  repository. The repo must be public for verification; the bundle itself can
-  be published while the repo is private.
+  repository. The repo is public, so verification can proceed after publishing.
 - The MCPB bundle is self-contained source-wise, but `uv` downloads the Python
   dependencies on first run. MAT and JDK 21 must already be installed on the
   user's machine.

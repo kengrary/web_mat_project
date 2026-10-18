@@ -11,6 +11,15 @@ Claude Desktop, Cursor, and VS Code.
 Everything runs on your machine. Heap dumps never leave the host; the helper
 service binds to `127.0.0.1` only.
 
+## Published
+
+- PyPI: <https://pypi.org/project/jvmind-mat-mcp/> (v0.1.0)
+- Official MCP Registry: `io.github.kengrary/jvmind-mat`
+- Install: `uvx jvmind-mat-mcp doctor`
+
+Directory listings (Smithery, mcp.so, Glama, PulseMCP) are prepared but not
+live yet; see [`../marketplace/README.md`](../marketplace/README.md).
+
 ## Requirements
 
 - Python 3.10+
@@ -176,7 +185,22 @@ JVMIND_MCP_IT_HPROF=/path/to/app.hprof \
 .venv/bin/pytest -q -m integration
 ```
 
+Docker (directory/CI checks; MAT and JDK 21 are not included):
+
+```bash
+docker build -t jvmind-mat-mcp:0.1.0 .
+docker run --rm -i \
+  -v /opt/mat:/opt/mat:ro \
+  -e MAT_HOME=/opt/mat \
+  jvmind-mat-mcp:0.1.0
+```
+
 ## Publishing
+
+`v0.1.0` is published to PyPI and the official MCP Registry. Release tags use
+the `mcp-v<version>` form. The GitHub workflow builds the wheel, publishes to
+PyPI with Trusted Publishing, then publishes `server.json` to the official MCP
+Registry with GitHub OIDC.
 
 Release tags use the `mcp-v<version>` form. The GitHub workflow builds the
 wheel, publishes to PyPI with Trusted Publishing, then publishes `server.json`
@@ -187,7 +211,8 @@ Manual prerequisites:
 1. Configure a PyPI Trusted Publisher for the `pypi` environment.
 2. Confirm the package name `jvmind-mat-mcp` and registry name
    `io.github.kengrary/jvmind-mat`.
-3. Bump the version in `pyproject.toml` and `server.json` together.
+3. Bump the version in `pyproject.toml`, `server.json`, and
+   `src/jvmind_mat_mcp/__init__.py` together.
 
 Local checks:
 
@@ -198,8 +223,8 @@ mcp-publisher validate
 ```
 
 Marketplace packs (Smithery MCPB, mcp.so/Glama/PulseMCP copy) live in
-[`../marketplace/README.md`](../marketplace/README.md). Build the Smithery
-bundle with:
+[`../marketplace/README.md`](../marketplace/README.md). The Smithery bundle is a
+`uv`-runtime MCPB pinned by `uv.lock`; build it with:
 
 ```bash
 mcp-server/scripts/build-mcpb.sh

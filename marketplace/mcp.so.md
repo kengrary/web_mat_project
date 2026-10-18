@@ -5,16 +5,16 @@ Submission page: <https://mcp.so/submit> → **MCP Server** tab.
 The free path is a manual review. A $39 one-time paid option publishes
 immediately with a verified badge and featured placement; not required.
 
-## Blocker
+## Prerequisites
 
-The form requires a **public GitHub repository URL**. `kengrary/web_mat_project`
-is private today. See the visibility options in [`README.md`](./README.md).
+The form requires a **public GitHub repository URL**; `kengrary/web_mat_project`
+is now public. You still need an mcp.so account to submit.
 
 ## Form values
 
 | Field | Value |
 |---|---|
-| Repository URL | `https://github.com/kengrary/web_mat_project` (after making it public) |
+| Repository URL | `https://github.com/kengrary/web_mat_project` |
 | Name | `JVMind MAT Heap Dump Analyzer` |
 | Short description | `Analyze Java heap dumps locally with Eclipse MAT: histograms, dominators, threads, OQL, leak suspects, and OOM diagnosis.` |
 | Category | Developer Tools |

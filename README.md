@@ -3,7 +3,7 @@
 > 基于 Eclipse Memory Analyzer (MAT) 内核，为现有 JVMind 平台增加 **Java 堆转储（heapdump）分析能力**：
 > 上传 → 解析 → 类 MAT 的 Web 查询 → 领域诊断（连接池泄漏等）→ 自然语言 Agent 诊断。
 >
-> **当前状态**：Java 侧（解析 + 查询服务）已实测跑通；Python 侧串通待开发。详见 [PROJECT-STATUS.md](./PROJECT-STATUS.md)。
+> **当前状态**：Java 侧（解析 + 查询服务）已实测跑通；MCP Server `v0.1.0` 已发布到 PyPI 与官方 MCP Registry；Python 平台串通待开发。详见 [PROJECT-STATUS.md](./PROJECT-STATUS.md)。
 
 ---
 
@@ -15,6 +15,26 @@
 4. **想把查询服务跑起来** → [query-service/DEPLOY.md](./query-service/DEPLOY.md)（部署 + curl 验证）。
 5. **想跑通解析** → [parser-cli/v1-parsehd/README.md](./parser-cli/v1-parsehd/README.md)（零编译，发行版即可）。
 6. **想在 Claude/Cursor/VS Code 里分析堆转储** → [mcp-server/README.md](./mcp-server/README.md)（`uvx jvmind-mat-mcp`，本地 stdio）。
+
+---
+
+## ⚡ MCP Server（已发布）
+
+本地 stdio MCP Server，把 MAT 的堆分析能力直接接到 Claude Desktop / Cursor / VS Code。堆转储不出本机，MAT 辅助服务只绑 `127.0.0.1`。
+
+```bash
+uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
+```
+
+| 渠道 | 地址 |
+|---|---|
+| PyPI | <https://pypi.org/project/jvmind-mat-mcp/> |
+| 官方 MCP Registry | `io.github.kengrary/jvmind-mat` |
+| 使用文档 | [mcp-server/README.md](./mcp-server/README.md) |
+
+能力：`open_heapdump` → `mat_overview` / `mat_histogram` / `mat_dominator` / `mat_threads` / `mat_object` / `mat_path2gc` / `mat_oql` / `mat_leak_suspects` / `mat_diagnose_oom` 等 17 个工具。
+
+要求：Python 3.10+、JDK 21+、Eclipse MAT **1.17.x**（首次使用会自动安装一个小型查询 bundle）。
 
 ---
 
@@ -31,7 +51,14 @@
                                   (OSGi bundle, :8090)
                                   histogram/支配树/线程树/OQL
                                   + Leak Suspects/path2gc 等
-        共享：NFS(dump 文件) + PostgreSQL(任务/报告)
+         共享：NFS(dump 文件) + PostgreSQL(任务/报告)
+
+  本机 MCP 路径（v0.1.0 已发布）：
+  Claude Desktop / Cursor / VS Code
+        │ stdio
+        ▼
+   [mcp-server] ──HTTP 127.0.0.1──▶ [query-service :8090]
+        └── 缺 index 时自动调用 MAT ParseHeapDump（复用 parser-cli V1 逻辑）
 ```
 
 ---
@@ -42,7 +69,7 @@
 | 文件 | 内容 |
 |---|---|
 | [README.md](./README.md) | 本文件，总索引 |
-| [PROJECT-STATUS.md](./PROJECT-STATUS.md) | 总进度：里程碑、三模块状态、待办、**踩坑经验**（必读） |
+| [PROJECT-STATUS.md](./PROJECT-STATUS.md) | 总进度：里程碑、模块状态、待办、**踩坑经验**（必读） |
 | [TODO-PYTHON-TEAM.md](./TODO-PYTHON-TEAM.md) | 给 Python 团队的串通任务清单（表/上传/队列/反代/agent + 验收 + 参考物料） |
 
 ### 📁 mat-study/ — 设计文档（从研究到落地）
@@ -83,6 +110,24 @@
 | [BUILD-TROUBLESHOOTING.md](./query-service/BUILD-TROUBLESHOOTING.md) | 构建排错（p2 仓库、JDK 版本匹配） |
 | `src/.../*.java` (21 个) | 服务实现：core/http/model/task/view/equinox |
 
+### 📁 mcp-server/ — 本地 stdio MCP（✅ v0.1.0 已发布）
+| 文件 | 内容 |
+|---|---|
+| [README.md](./mcp-server/README.md) | 安装、客户端配置、17 个工具、隐私与排错 |
+| `src/jvmind_mat_mcp/server.py` | MCP SDK 工具注册入口 |
+| `src/jvmind_mat_mcp/engine.py` | 堆转储注册、后台解析、MAT 服务生命周期 |
+| `src/jvmind_mat_mcp/vendor/` | 随包分发的 query-service OSGi bundle |
+| [Dockerfile](./mcp-server/Dockerfile) | Glama 审核用镜像（不含 MAT/JDK，运行时挂载） |
+| `tests/` | 单测 + stdio 协议测试 + 可选真实 MAT 集成测试 |
+
+### 📁 marketplace/ — 市场提交材料（🟡 准备完成，尚未提交）
+| 文件 | 内容 |
+|---|---|
+| [README.md](./marketplace/README.md) | 各平台状态、剩余步骤、质量缺口 |
+| [metadata.json](./marketplace/metadata.json) | 统一名称/描述/标签/安装命令 |
+| `smithery/manifest.json` | Smithery MCPB manifest（`uv` runtime） |
+| [mcp.so.md](./marketplace/mcp.so.md) / [glama.md](./marketplace/glama.md) / [pulsemcp.md](./marketplace/pulsemcp.md) | 各平台表单文案与步骤 |
+
 ---
 
 ## 模块速查
@@ -91,7 +136,8 @@
 |---|---|---|---|
 | **parser-cli** | V1=发行版命令；V2=独立 jar | ✅ V1 实测可用 | `v1-parsehd/mat_parse_runner.py` |
 | **query-service** | OSGi bundle (HTTP :8090) | ✅ 已跑通+实测 | `QueryServiceApp.java` / `QueryHttpServer.java` |
-| **mcp-server** | Python stdio MCP（PyPI + 官方 Registry） | ✅ v0.1.0 实测可用 | `src/jvmind_mat_mcp/server.py` |
+| **mcp-server** | Python stdio MCP（PyPI + 官方 Registry） | ✅ v0.1.0 已发布 | `src/jvmind_mat_mcp/server.py` |
+| **marketplace** | 目录提交材料 + Smithery MCPB | 🟡 准备完成，待提交 | `marketplace/README.md` |
 | **Python 串通** | FastAPI + DB + agent | ⏳ 待开发 | 见 `TODO-PYTHON-TEAM.md` |
 
 ---
@@ -102,11 +148,16 @@
 - 部署：jar 放 `plugins/` + `bundles.info` 加一行（auto-start=true）+ **`-clean`** 重启（不是 dropins）。
 - 查询服务无鉴权，仅内网；由 Python 反代时带 `dumpDir`（= dump 目录）。
 - reopen 需要 hprof + index 都在可随机 seek 的文件系统（NFS 满足）。
+- MCP 包名 `jvmind-mat-mcp`，Registry 名 `io.github.kengrary/jvmind-mat`；改完 Java 查询层后必须重跑 `mcp-server/scripts/vendor-bundle.sh`，否则 wheel 里的 bundle 会过期。
+- MCP Server 首次使用会把 `com.jvmind.mat.query` 写入 MAT 的 `plugins/` + `bundles.info`；MAT 安装目录必须可写。
+- Smithery 用 MCPB + `uv` runtime（不打包 Python 依赖）；Docker 镜像只用于目录审核，真实分析仍需本机 MAT + JDK 21。
 
 ---
 
 ## 技术栈
 - **解析/查询**：Java 21 + Eclipse MAT 1.17（OSGi/Equinox）
+- **MCP Server**：Python 3.10+ / MCP Python SDK 2.x / `uv` / stdio
 - **主控/上传/Agent**：Python + FastAPI（现有 JVMind 平台）
 - **存储**：NFS（dump 文件）+ PostgreSQL（任务/报告，双进程共享）
+- **分发**：PyPI + 官方 MCP Registry；Smithery/mcp.so/Glama/PulseMCP 材料已准备
 - **许可证**：MAT 为 EPL-2.0（复用其 bundle，注意分发声明）

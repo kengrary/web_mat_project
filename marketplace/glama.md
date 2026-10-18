@@ -12,8 +12,8 @@ Open <https://glama.ai/mcp/servers> → **Add Server**:
 | Description | `Local MCP server for Java heap dump analysis with Eclipse MAT: histograms, dominators, threads, OQL, leak suspects, and OOM diagnosis.` |
 | GitHub Repository URL | `https://github.com/kengrary/web_mat_project` |
 
-The field is explicitly labeled **“Must be public.”** The current repo is
-private; see [`README.md`](./README.md) for the visibility options.
+The field is explicitly labeled **“Must be public.”** The repository is now
+public, so this requirement is satisfied.
 
 The modal submits to `/api/mcp/servers/submit` and requires a Glama account.
 After approval, Glama emails instructions for supplying a Dockerfile used for
@@ -49,6 +49,5 @@ return an actionable “MAT not found” error until it is available.
 - A public repo plus a working Dockerfile materially improves the quality
   grade. The repository currently has no `LICENSE`; see the gaps section in
   [`README.md`](./README.md).
-- Docker Hub was unreachable from the workstation used to prepare this, so the
-  image was not built locally. The Dockerfile's COPY/install path was reproduced
-  in a clean Python venv.
+- Docker Hub was unreachable from the workstation used to prepare this, but the
+  GitHub Actions CI workflow builds the image successfully.

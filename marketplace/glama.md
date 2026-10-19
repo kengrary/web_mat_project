@@ -47,7 +47,7 @@ return an actionable “MAT not found” error until it is available.
 - Glama may auto-index the repo after it becomes public; submitting explicitly
   is still useful for claiming the listing.
 - A public repo plus a working Dockerfile materially improves the quality
-  grade. The repository currently has no `LICENSE`; see the gaps section in
-  [`README.md`](./README.md).
+  grade. The repository now has an MIT `LICENSE`; the published PyPI 0.1.0
+  metadata predates it and will show MIT after the next release.
 - Docker Hub was unreachable from the workstation used to prepare this, but the
   GitHub Actions CI workflow builds the image successfully.

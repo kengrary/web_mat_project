@@ -8,6 +8,7 @@
   "homepage": "https://pypi.org/project/jvmind-mat-mcp/",
   "pypi": "https://pypi.org/project/jvmind-mat-mcp/",
   "registry": "io.github.kengrary/jvmind-mat",
+  "license": "MIT",
   "install": "uvx jvmind-mat-mcp",
   "categories": [
     "Developer Tools",

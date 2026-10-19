@@ -17,6 +17,7 @@ cp -R "$ROOT/mcp-server/src" "$STAGE/src"
 cp "$ROOT/mcp-server/pyproject.toml" "$STAGE/"
 cp "$ROOT/mcp-server/README.md" "$STAGE/"
 cp "$ROOT/mcp-server/NOTICE" "$STAGE/"
+cp "$ROOT/mcp-server/LICENSE" "$STAGE/"
 cp "$ROOT/mcp-server/uv.lock" "$STAGE/"
 cp "$ROOT/marketplace/smithery/manifest.json" "$STAGE/manifest.json"
 

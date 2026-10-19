@@ -1,5 +1,7 @@
 JVMind MAT MCP Server
 
+The jvmind-mat-mcp package is licensed under the MIT License; see LICENSE.
+
 This package installs a small OSGi bundle into an existing Eclipse MAT
 installation. It does not redistribute Eclipse MAT itself.
 

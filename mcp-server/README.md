@@ -15,6 +15,7 @@ service binds to `127.0.0.1` only.
 
 - PyPI: <https://pypi.org/project/jvmind-mat-mcp/> (v0.1.0)
 - Official MCP Registry: `io.github.kengrary/jvmind-mat`
+- MCPRush: <https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp>
 - Install: `uvx jvmind-mat-mcp doctor`
 
 Directory listings (Smithery, mcp.so, Glama, PulseMCP) are prepared but not
@@ -218,7 +219,7 @@ Local checks:
 
 ```bash
 python -m build
-python -m twine check dist/*
+python -m twine check dist/*.whl dist/*.tar.gz
 mcp-publisher validate
 ```
 
@@ -232,5 +233,6 @@ mcp-server/scripts/build-mcpb.sh
 
 ## License
 
-The MCP server code is part of the JVMind project. Eclipse MAT is licensed under
-the Eclipse Public License 2.0 and is not redistributed by this package.
+The MCP server is licensed under the MIT License; see [LICENSE](./LICENSE).
+Eclipse MAT is licensed under the Eclipse Public License 2.0 and is not
+redistributed by this package.

@@ -123,6 +123,7 @@
       "description": "Find SQL statements in thread stacks, useful for long-running queries at OOM."
     }
   ],
+  "license": "MIT",
   "keywords": [
     "mcp",
     "heapdump",

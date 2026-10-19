@@ -30,6 +30,7 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 |---|---|
 | PyPI | <https://pypi.org/project/jvmind-mat-mcp/> |
 | 官方 MCP Registry | `io.github.kengrary/jvmind-mat` |
+| MCPRush | <https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp> |
 | 使用文档 | [mcp-server/README.md](./mcp-server/README.md) |
 
 能力：`open_heapdump` → `mat_overview` / `mat_histogram` / `mat_dominator` / `mat_threads` / `mat_object` / `mat_path2gc` / `mat_oql` / `mat_leak_suspects` / `mat_diagnose_oom` 等 17 个工具。
@@ -160,4 +161,4 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 - **主控/上传/Agent**：Python + FastAPI（现有 JVMind 平台）
 - **存储**：NFS（dump 文件）+ PostgreSQL（任务/报告，双进程共享）
 - **分发**：PyPI + 官方 MCP Registry；Smithery/mcp.so/Glama/PulseMCP 材料已准备
-- **许可证**：MAT 为 EPL-2.0（复用其 bundle，注意分发声明）
+- **许可证**：本项目代码为 MIT（见 [LICENSE](./LICENSE)）；MAT 为 EPL-2.0（复用其 bundle，注意分发声明）

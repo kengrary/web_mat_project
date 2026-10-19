@@ -1,5 +1,7 @@
 # JVMind × MAT — Heapdump 智能分析模块
 
+**中文** | [English](./README.en.md)
+
 > 基于 Eclipse Memory Analyzer (MAT) 内核，为现有 JVMind 平台增加 **Java 堆转储（heapdump）分析能力**：
 > 上传 → 解析 → 类 MAT 的 Web 查询 → 领域诊断（连接池泄漏等）→ 自然语言 Agent 诊断。
 >
@@ -69,7 +71,8 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 ### 📁 顶层
 | 文件 | 内容 |
 |---|---|
-| [README.md](./README.md) | 本文件，总索引 |
+| [README.md](./README.md) | 本文件，总索引（中文） |
+| [README.en.md](./README.en.md) | English overview |
 | [PROJECT-STATUS.md](./PROJECT-STATUS.md) | 总进度：里程碑、模块状态、待办、**踩坑经验**（必读） |
 | [TODO-PYTHON-TEAM.md](./TODO-PYTHON-TEAM.md) | 给 Python 团队的串通任务清单（表/上传/队列/反代/agent + 验收 + 参考物料） |
 

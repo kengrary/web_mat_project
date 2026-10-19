@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "jvmind-mat",
   "display_name": "JVMind MAT Heap Dump Analyzer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Analyze Java heap dumps locally with Eclipse MAT: histograms, dominators, threads, OQL, leak suspects, and OOM diagnosis.",
   "long_description": "JVMind MAT runs Eclipse MAT on your machine and exposes its analysis as MCP tools. Open a .hprof file, wait for indexing, then inspect the heap overview, class histogram, dominator tree, thread stacks, ThreadLocals, individual objects, GC paths, OQL results, LeakHunter suspects, OOM diagnosis, connection pools, top consumers, and SQL in threads.\n\nRequirements: JDK 21 and Eclipse MAT 1.17.x. The server installs a small query bundle into MAT on first use. Heap dumps stay on the local machine; the helper service binds to 127.0.0.1 only.",
   "author": {

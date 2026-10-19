@@ -7,7 +7,7 @@ for a public MCP endpoint.
 
 - Manifest: [`smithery/manifest.json`](./smithery/manifest.json)
 - Build script: `mcp-server/scripts/build-mcpb.sh`
-- Bundle: `mcp-server/dist/jvmind-mat-mcp-0.1.0.mcpb`
+- Bundle: `mcp-server/dist/jvmind-mat-mcp-0.1.1.mcpb`
 - Runtime: `uv` (the host manages Python and dependencies)
 
 The manifest exposes two optional user settings: `mat_home` (directory) and
@@ -21,7 +21,7 @@ mcp-server/scripts/build-mcpb.sh
 
 npx --yes smithery auth login
 npx --yes smithery mcp publish \
-  mcp-server/dist/jvmind-mat-mcp-0.1.0.mcpb \
+  mcp-server/dist/jvmind-mat-mcp-0.1.1.mcpb \
   -n kengrary/jvmind-mat
 ```
 

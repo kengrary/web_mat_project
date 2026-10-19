@@ -2,7 +2,7 @@
 
 Design: `2026-10-17-jvmind-mat-mcp-design.md`
 
-Status: implemented (v0.1.0).
+Status: implemented (v0.1.1).
 
 ## Phase 0 — Documentation and package skeleton
 

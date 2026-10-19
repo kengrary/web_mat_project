@@ -3,7 +3,7 @@
 > 基于 Eclipse Memory Analyzer (MAT) 内核，为现有 JVMind 平台增加 **Java 堆转储（heapdump）分析能力**：
 > 上传 → 解析 → 类 MAT 的 Web 查询 → 领域诊断（连接池泄漏等）→ 自然语言 Agent 诊断。
 >
-> **当前状态**：Java 侧（解析 + 查询服务）已实测跑通；MCP Server `v0.1.0` 已发布到 PyPI 与官方 MCP Registry；Python 平台串通待开发。详见 [PROJECT-STATUS.md](./PROJECT-STATUS.md)。
+> **当前状态**：Java 侧（解析 + 查询服务）已实测跑通；MCP Server `v0.1.1` 已发布到 PyPI 与官方 MCP Registry；Python 平台串通待开发。详见 [PROJECT-STATUS.md](./PROJECT-STATUS.md)。
 
 ---
 
@@ -54,7 +54,7 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
                                   + Leak Suspects/path2gc 等
          共享：NFS(dump 文件) + PostgreSQL(任务/报告)
 
-  本机 MCP 路径（v0.1.0 已发布）：
+  本机 MCP 路径（v0.1.1 已发布）：
   Claude Desktop / Cursor / VS Code
         │ stdio
         ▼
@@ -111,7 +111,7 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 | [BUILD-TROUBLESHOOTING.md](./query-service/BUILD-TROUBLESHOOTING.md) | 构建排错（p2 仓库、JDK 版本匹配） |
 | `src/.../*.java` (21 个) | 服务实现：core/http/model/task/view/equinox |
 
-### 📁 mcp-server/ — 本地 stdio MCP（✅ v0.1.0 已发布）
+### 📁 mcp-server/ — 本地 stdio MCP（✅ v0.1.1 已发布）
 | 文件 | 内容 |
 |---|---|
 | [README.md](./mcp-server/README.md) | 安装、客户端配置、17 个工具、隐私与排错 |
@@ -137,7 +137,7 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 |---|---|---|---|
 | **parser-cli** | V1=发行版命令；V2=独立 jar | ✅ V1 实测可用 | `v1-parsehd/mat_parse_runner.py` |
 | **query-service** | OSGi bundle (HTTP :8090) | ✅ 已跑通+实测 | `QueryServiceApp.java` / `QueryHttpServer.java` |
-| **mcp-server** | Python stdio MCP（PyPI + 官方 Registry） | ✅ v0.1.0 已发布 | `src/jvmind_mat_mcp/server.py` |
+| **mcp-server** | Python stdio MCP（PyPI + 官方 Registry） | ✅ v0.1.1 已发布 | `src/jvmind_mat_mcp/server.py` |
 | **marketplace** | 目录提交材料 + Smithery MCPB | 🟡 准备完成，待提交 | `marketplace/README.md` |
 | **Python 串通** | FastAPI + DB + agent | ⏳ 待开发 | 见 `TODO-PYTHON-TEAM.md` |
 

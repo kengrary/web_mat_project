@@ -4,16 +4,16 @@ Canonical metadata for every directory: [`metadata.json`](./metadata.json).
 
 | Directory | Mechanism | Public repo | Artifact / status |
 |---|---|---|---|
-| [Smithery](./smithery.md) | MCPB bundle upload | ✓ public | `mcp-server/dist/jvmind-mat-mcp-0.1.0.mcpb` — built & validated; Smithery login pending |
+| [Smithery](./smithery.md) | MCPB bundle upload | ✓ public | `mcp-server/dist/jvmind-mat-mcp-0.1.1.mcpb` — built & validated; Smithery login pending |
 | [mcp.so](./mcp.so.md) | Web form (free review or $39 paid) | ✓ public | Copy ready; account + form submission pending |
 | [Glama](./glama.md) | Web form + Dockerfile | ✓ public | Copy + Dockerfile ready; account + form submission pending |
 | [PulseMCP](./pulsemcp.md) | Official Registry ingest / web form | ✓ public | Likely automatic; check in browser |
-| [MCPRush](https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp) | Auto-indexed | ✓ public | Listed: Grade A, trust 94/100, 17 tools, v0.1.0 |
+| [MCPRush](https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp) | Auto-indexed | ✓ public | Listed: Grade A, trust 94/100, 17 tools; v0.1.1 rescan pending |
 
 Already published:
 
-- Official MCP Registry: `io.github.kengrary/jvmind-mat` v0.1.0
-- PyPI: `jvmind-mat-mcp` 0.1.0
+- Official MCP Registry: `io.github.kengrary/jvmind-mat` v0.1.1
+- PyPI: `jvmind-mat-mcp` 0.1.1
 - MCPRush: <https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp>
   (auto-indexed; Grade A, trust 94/100)
 
@@ -37,7 +37,7 @@ Remaining manual steps:
 MCPRush picked the server up automatically; no submission was required. The
 listing currently shows:
 
-- Grade A, trust score 94/100, 17 tools, v0.1.0
+- Grade A, trust score 94/100, 17 tools; v0.1.1 rescan pending
 - “Source is public, though no licence is declared” — the scan predates the
   MIT `LICENSE`; a rescan or the next PyPI release should clear this
 - Tool descriptions and parameter schemas were not read because the scan was
@@ -48,8 +48,7 @@ A publisher account / live scan can improve the tool surface metadata.
 ## Quality gaps
 
 - **License:** MIT is now added at the repository root and in `mcp-server/`,
-  and the MCPB manifest declares MIT. The published PyPI 0.1.0 metadata was
-  built before this and still says “no license”; a 0.1.1 release will fix it.
+  and the MCPB manifest declares MIT. PyPI 0.1.1 includes the MIT metadata; MCPRush will pick it up on rescan.
 - **Icon:** optional but recommended for mcp.so/Smithery cards.
 - **Smithery verification:** needs a logged-in Smithery account.
 - **MCPRush tool metadata:** a runtime scan would capture descriptions and

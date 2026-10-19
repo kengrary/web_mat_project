@@ -24,7 +24,7 @@ automated safety and quality checks.
 Use `mcp-server/Dockerfile` (build context: `mcp-server/`):
 
 ```bash
-docker build -t jvmind-mat-mcp:0.1.0 mcp-server
+docker build -t jvmind-mat-mcp:0.1.1 mcp-server
 ```
 
 The image contains the MCP server and its Python dependencies. It does **not**
@@ -36,7 +36,7 @@ For a self-contained analysis image, mount MAT into the container and set
 docker run --rm -i \
   -v /opt/mat:/opt/mat:ro \
   -e MAT_HOME=/opt/mat \
-  jvmind-mat-mcp:0.1.0
+  jvmind-mat-mcp:0.1.1
 ```
 
 The MCP `initialize` and `tools/list` calls work without MAT; analysis tools
@@ -47,7 +47,7 @@ return an actionable “MAT not found” error until it is available.
 - Glama may auto-index the repo after it becomes public; submitting explicitly
   is still useful for claiming the listing.
 - A public repo plus a working Dockerfile materially improves the quality
-  grade. The repository now has an MIT `LICENSE`; the published PyPI 0.1.0
-  metadata predates it and will show MIT after the next release.
+  grade. The repository now has an MIT `LICENSE`; the published PyPI 0.1.1
+  metadata includes it.
 - Docker Hub was unreachable from the workstation used to prepare this, but the
   GitHub Actions CI workflow builds the image successfully.

@@ -39,6 +39,28 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 
 要求：Python 3.10+、JDK 21+、Eclipse MAT **1.17.x**（首次使用会自动安装一个小型查询 bundle）。
 
+## Tools
+
+所有分析工具都接收 `open_heapdump` 返回的 `report_id`。
+
+- `open_heapdump` — 打开本地 `.hprof`，后台解析并返回 `report_id`
+- `get_heapdump_status` — 查询解析状态、进度和阶段
+- `list_heapdumps` — 列出本 MCP 服务已知的堆转储
+- `close_heapdump` — 释放堆转储句柄，可选停止 MAT 辅助进程
+- `mat_overview` — 堆总览：已用/已提交/存活堆、对象/类/类加载器数量、JDK 版本
+- `mat_histogram` — 类直方图，按 shallow / retained / count 排序
+- `mat_dominator` — 支配树，列出 retained 最大的对象并支持按 parent 下钻
+- `mat_threads` — 线程列表，或下钻线程栈帧和 frame locals
+- `mat_threadlocals` — 按 valueClass 或 thread 分组查看 ThreadLocal
+- `mat_object` — 检查单个对象的字段、静态字段、入/出引用和 GC Root
+- `mat_path2gc` — 对象到 GC Root 的最短路径
+- `mat_oql` — 执行 OQL 查询，返回行和可复用的 resultSetId
+- `mat_leak_suspects` — 运行 LeakHunter，返回泄漏嫌疑、retained 大小和描述
+- `mat_diagnose_oom` — 综合 OOM 诊断：泄漏嫌疑 + 线程 SQL + 支配树分析
+- `mat_connection_pools` — 诊断数据库连接池和超时未释放的连接
+- `mat_top_consumers` — 按 retained heap 排序的内存占用 Top
+- `mat_sql_in_threads` — 在线程栈中查找 SQL，定位 OOM 时的慢查询
+
 ---
 
 ## 架构一图
@@ -129,7 +151,7 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 |---|---|
 | [README.md](./marketplace/README.md) | 各平台状态、剩余步骤、质量缺口 |
 | [metadata.json](./marketplace/metadata.json) | 统一名称/描述/标签/安装命令 |
-| `smithery/manifest.json` | Smithery MCPB manifest（`uv` runtime） |
+| `smithery/manifest.json` | MCPB manifest（Smithery 暂跳过，保留备用） |
 | [mcp.so.md](./marketplace/mcp.so.md) / [glama.md](./marketplace/glama.md) / [pulsemcp.md](./marketplace/pulsemcp.md) | 各平台表单文案与步骤 |
 
 ---
@@ -141,7 +163,7 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 | **parser-cli** | V1=发行版命令；V2=独立 jar | ✅ V1 实测可用 | `v1-parsehd/mat_parse_runner.py` |
 | **query-service** | OSGi bundle (HTTP :8090) | ✅ 已跑通+实测 | `QueryServiceApp.java` / `QueryHttpServer.java` |
 | **mcp-server** | Python stdio MCP（PyPI + 官方 Registry） | ✅ v0.1.1 已发布 | `src/jvmind_mat_mcp/server.py` |
-| **marketplace** | 目录提交材料 + Smithery MCPB | 🟡 准备完成，待提交 | `marketplace/README.md` |
+| **marketplace** | 目录提交材料（Smithery 暂跳过） | 🟡 准备完成，待提交 | `marketplace/README.md` |
 | **Python 串通** | FastAPI + DB + agent | ⏳ 待开发 | 见 `TODO-PYTHON-TEAM.md` |
 
 ---
@@ -154,7 +176,7 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 - reopen 需要 hprof + index 都在可随机 seek 的文件系统（NFS 满足）。
 - MCP 包名 `jvmind-mat-mcp`，Registry 名 `io.github.kengrary/jvmind-mat`；改完 Java 查询层后必须重跑 `mcp-server/scripts/vendor-bundle.sh`，否则 wheel 里的 bundle 会过期。
 - MCP Server 首次使用会把 `com.jvmind.mat.query` 写入 MAT 的 `plugins/` + `bundles.info`；MAT 安装目录必须可写。
-- Smithery 用 MCPB + `uv` runtime（不打包 Python 依赖）；Docker 镜像只用于目录审核，真实分析仍需本机 MAT + JDK 21。
+- Smithery 暂跳过（网页端只有远程 URL 入口，CLI 创建接口已移除）；MCPB 材料保留备用。Docker 镜像只用于目录审核，真实分析仍需本机 MAT + JDK 21。
 
 ---
 
@@ -163,5 +185,5 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 - **MCP Server**：Python 3.10+ / MCP Python SDK 2.x / `uv` / stdio
 - **主控/上传/Agent**：Python + FastAPI（现有 JVMind 平台）
 - **存储**：NFS（dump 文件）+ PostgreSQL（任务/报告，双进程共享）
-- **分发**：PyPI + 官方 MCP Registry；Smithery/mcp.so/Glama/PulseMCP 材料已准备
+- **分发**：PyPI + 官方 MCP Registry；mcp.so/Glama/PulseMCP 材料已准备，Smithery 暂跳过
 - **许可证**：本项目代码为 MIT（见 [LICENSE](./LICENSE)）；MAT 为 EPL-2.0（复用其 bundle，注意分发声明）

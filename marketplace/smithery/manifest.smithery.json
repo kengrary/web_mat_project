@@ -1,0 +1,471 @@
+{
+  "manifest_version": "0.4",
+  "name": "jvmind-mat",
+  "display_name": "JVMind MAT Heap Dump Analyzer",
+  "version": "0.1.1",
+  "description": "Analyze Java heap dumps locally with Eclipse MAT: histograms, dominators, threads, OQL, leak suspects, and OOM diagnosis.",
+  "long_description": "JVMind MAT runs Eclipse MAT on your machine and exposes its analysis as MCP tools. Open a .hprof file, wait for indexing, then inspect the heap overview, class histogram, dominator tree, thread stacks, ThreadLocals, individual objects, GC paths, OQL results, LeakHunter suspects, OOM diagnosis, connection pools, top consumers, and SQL in threads.\n\nRequirements: uv (https://docs.astral.sh/uv/), JDK 21, and Eclipse MAT 1.17.x. The bundle runs the Python package via uv. The server installs a small query bundle into MAT on first use. Heap dumps stay on the local machine; the helper service binds to 127.0.0.1 only.",
+  "author": {
+    "name": "JVMind",
+    "url": "https://pypi.org/project/jvmind-mat-mcp/"
+  },
+  "homepage": "https://pypi.org/project/jvmind-mat-mcp/",
+  "documentation": "https://pypi.org/project/jvmind-mat-mcp/",
+  "server": {
+    "type": "python",
+    "entry_point": "src/jvmind_mat_mcp/__main__.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "jvmind-mat-mcp"
+      ],
+      "env": {
+        "MAT_HOME": "${user_config.mat_home}",
+        "JVMIND_MAT_XMX": "${user_config.mat_xmx}"
+      }
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "linux",
+      "win32"
+    ],
+    "runtimes": {
+      "python": ">=3.10"
+    }
+  },
+  "user_config": {
+    "mat_home": {
+      "type": "directory",
+      "title": "Eclipse MAT home",
+      "description": "Directory containing plugins/ and configuration/ for Eclipse MAT 1.17.x. Leave empty to auto-detect.",
+      "required": false
+    },
+    "mat_xmx": {
+      "type": "string",
+      "title": "MAT heap size",
+      "description": "JVM heap for MAT parsing and queries, for example 8g. Defaults to 70% of physical RAM, minimum 4g.",
+      "required": false,
+      "default": "8g"
+    }
+  },
+  "tools": [
+    {
+      "name": "open_heapdump",
+      "description": "Open a local Java heap dump (.hprof) by absolute path. Starts MAT indexing in the background and returns a report_id immediately with status=PARSING. Poll get_heapdump_status until DONE. / 按绝对路径打开本地 Java 堆转储（.hprof）。后台启动 MAT 解析并立即返回 report_id 与 status=PARSING，用 get_heapdump_status 轮询直到 DONE。",
+      "inputSchema": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "open_heapdumpArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_heapdump_status",
+      "description": "Get parse status and progress for a heap dump report. / 查询堆转储报告的解析状态与进度。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "get_heapdump_statusArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "list_heapdumps",
+      "description": "List heap dumps known to this MCP server with their status. / 列出本 MCP 服务已知的堆转储及其状态。",
+      "inputSchema": {
+        "properties": {},
+        "title": "list_heapdumpsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "close_heapdump",
+      "description": "Release a heap dump handle. Set stop_service=true to also stop the MAT helper process. / 释放堆转储句柄；stop_service=true 时同时停止 MAT 辅助进程。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "stop_service": {
+            "default": false,
+            "title": "Stop Service",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "close_heapdumpArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mat_overview",
+      "description": "Show heap overview (used/committed/live heap, object/class/classloader counts, JDK version, leak suspect count). Always call this first to understand a heapdump. / 展示堆总览（已用/已提交/存活堆、对象/类/类加载器数量、JDK 版本、泄漏嫌疑数量）。分析 heapdump 时先调用本工具。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "mat_overviewArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mat_histogram",
+      "description": "Class histogram sorted by shallow/retained/count. Top-N by default; pass top to override. objectSet reuses a prior OQL/RS result. / 按 shallow/retained/count 排序的类直方图，默认 Top-20。objectSet 可复用先前 OQL/RS 结果。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "top": {
+            "default": 20,
+            "title": "Top",
+            "type": "integer"
+          },
+          "sort": {
+            "default": "retained",
+            "title": "Sort",
+            "type": "string"
+          },
+          "objectSet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Objectset"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "mat_histogramArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mat_dominator",
+      "description": "Dominator tree: list biggest retained-heap dominators, drill down by passing parent objectId. / 支配树：列出 retained 最大的支配者，传 parent=objectId 可下钻。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "parent": {
+            "default": "ROOT",
+            "title": "Parent",
+            "type": "string"
+          },
+          "top": {
+            "default": 20,
+            "title": "Top",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "mat_dominatorArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mat_threads",
+      "description": "List threads (name/state/daemon/frameCount), or drill into a thread's stack frames (pass thread=id) or frame locals (pass frame=idx). / 列出线程（名/状态/daemon/帧数），或下钻到某线程的栈帧（传 thread=id）、某帧的局部变量（再传 frame=idx）。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "thread": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Thread"
+          },
+          "frame": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Frame"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "mat_threadsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mat_threadlocals",
+      "description": "Inspect thread locals grouped by valueClass (default) or thread. Useful for finding thread-local leaks. / 按 valueClass（默认）或 thread 分组查看 ThreadLocal，常用于发现 ThreadLocal 泄漏。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "groupBy": {
+            "default": "valueClass",
+            "title": "Groupby",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "mat_threadlocalsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mat_object",
+      "description": "Inspect a single object (class, fields, statics, in/out refs, GC root). Required: object id. / 检查单个对象（类、字段、静态字段、入/出引用、GC Root）。必须传 object id。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id",
+          "id"
+        ],
+        "title": "mat_objectArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mat_path2gc",
+      "description": "Shortest path from the object to a GC root (shows why an object is reachable and not collected). excludeWeakSoft defaults true. / 对象到 GC Root 的最短路径（说明对象为何可达未回收）。excludeWeakSoft 默认 true。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "object": {
+            "title": "Object",
+            "type": "string"
+          },
+          "excludeWeakSoft": {
+            "default": true,
+            "title": "Excludeweaksoft",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "report_id",
+          "object"
+        ],
+        "title": "mat_path2gcArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mat_oql",
+      "description": "Run an OQL query against the heap (slow!). Returns rows + a reusable resultSetId. Examples: \"SELECT * FROM com.example.Foo s\", \"SELECT s.id.toString() FROM java.lang.String s\". OQL can read arbitrary strings from the heap; handle results as private data. / 执行 OQL 查询（较慢）。返回行和可复用的 resultSetId。示例：SELECT * FROM com.example.Foo s。OQL 可读取堆内任意字符串，注意隐私。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "q": {
+            "title": "Q",
+            "type": "string"
+          },
+          "limit": {
+            "default": 50,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "view": {
+            "default": "list",
+            "title": "View",
+            "type": "string"
+          },
+          "sort": {
+            "default": "shallow",
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id",
+          "q"
+        ],
+        "title": "mat_oqlArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mat_leak_suspects",
+      "description": "Run LeakHunter (async) — returns leak suspects with retained size and description. SLOW: may take a minute. / 运行 LeakHunter（异步），返回疑似泄漏点及 retained 大小与描述。慢查询，可能耗时数十秒。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "mat_leak_suspectsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mat_diagnose_oom",
+      "description": "Run comprehensive OOM diagnosis (async) combining leak suspects + SQL-in-threads + dominator analysis. / 综合 OOM 诊断（异步），聚合泄漏嫌疑、线程中的 SQL、支配树分析。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "culpritPct": {
+            "default": 30,
+            "title": "Culpritpct",
+            "type": "integer"
+          },
+          "onlyRisky": {
+            "default": true,
+            "title": "Onlyrisky",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "mat_diagnose_oomArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mat_connection_pools",
+      "description": "Diagnose DB connection pools (active/idle counts + leaked connections held > thresholdMs). / 诊断数据库连接池（活跃/空闲数 + 持有超过 thresholdMs 的泄漏连接）。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "thresholdMs": {
+            "default": 300000,
+            "title": "Thresholdms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "mat_connection_poolsArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mat_top_consumers",
+      "description": "Top memory consumers (biggest objects/classes by retained heap). / 内存占用 Top（按 retained 排序的最大对象/类）。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "mat_top_consumersArguments",
+        "type": "object"
+      }
+    },
+    {
+      "name": "mat_sql_in_threads",
+      "description": "Find SQL statements (JDBC PreparedStatement) in thread stacks — useful for finding long-running queries at OOM. / 在线程栈中找 SQL（JDBC PreparedStatement），用于定位 OOM 时还在执行的慢查询。",
+      "inputSchema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "onlyRisky": {
+            "default": true,
+            "title": "Onlyrisky",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "mat_sql_in_threadsArguments",
+        "type": "object"
+      }
+    }
+  ],
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "heapdump",
+    "jvm",
+    "java",
+    "eclipse-mat",
+    "memory-leak",
+    "oom",
+    "debugging"
+  ]
+}

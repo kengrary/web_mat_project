@@ -53,6 +53,28 @@ Capabilities: `open_heapdump` → `mat_overview` / `mat_histogram` /
 Requirements: Python 3.10+, JDK 21+, Eclipse MAT **1.17.x** (a small query
 bundle is installed into MAT on first use).
 
+## Tools
+
+All analysis tools take the `report_id` returned by `open_heapdump`.
+
+- `open_heapdump` — open a local `.hprof`, start background indexing, return a `report_id`
+- `get_heapdump_status` — poll parse status, progress, and phase
+- `list_heapdumps` — list heap dumps known to this MCP server
+- `close_heapdump` — release a heap dump handle and optionally stop the MAT helper
+- `mat_overview` — heap overview: used/committed/live heap, object/class/classloader counts, JDK version
+- `mat_histogram` — class histogram sorted by shallow, retained, or object count
+- `mat_dominator` — dominator tree of the largest retained objects, with parent drill-down
+- `mat_threads` — list threads or drill into stack frames and frame locals
+- `mat_threadlocals` — inspect ThreadLocal values grouped by value class or thread
+- `mat_object` — inspect a single object's fields, statics, references, and GC root
+- `mat_path2gc` — shortest path from an object to a GC root
+- `mat_oql` — run an OQL query and return rows plus a reusable result set id
+- `mat_leak_suspects` — run LeakHunter and return suspects with retained sizes and descriptions
+- `mat_diagnose_oom` — composite OOM diagnosis: leak suspects + SQL in threads + dominator analysis
+- `mat_connection_pools` — diagnose database connection pools and leaked connections
+- `mat_top_consumers` — top memory consumers by retained heap
+- `mat_sql_in_threads` — find SQL statements in thread stacks
+
 ---
 
 ## Architecture
@@ -150,7 +172,7 @@ bundle is installed into MAT on first use).
 |---|---|
 | [README.md](./marketplace/README.md) | Platform status, remaining steps, quality gaps |
 | [metadata.json](./marketplace/metadata.json) | Shared name, description, tags, install command |
-| `smithery/manifest.json` | Smithery MCPB manifest (`uv` runtime) |
+| `smithery/manifest.json` | MCPB manifest (Smithery skipped, kept for later) |
 | [mcp.so.md](./marketplace/mcp.so.md) / [glama.md](./marketplace/glama.md) / [pulsemcp.md](./marketplace/pulsemcp.md) | Form copy and steps per platform |
 
 ---
@@ -162,7 +184,7 @@ bundle is installed into MAT on first use).
 | **parser-cli** | V1 = MAT command; V2 = standalone jar | ✅ V1 tested | `v1-parsehd/mat_parse_runner.py` |
 | **query-service** | OSGi bundle (HTTP :8090) | ✅ tested | `QueryServiceApp.java` / `QueryHttpServer.java` |
 | **mcp-server** | Python stdio MCP (PyPI + official Registry) | ✅ v0.1.1 published | `src/jvmind_mat_mcp/server.py` |
-| **marketplace** | Directory copy + Smithery MCPB | 🟡 prepared, pending submission | `marketplace/README.md` |
+| **marketplace** | Directory copy (Smithery skipped) | 🟡 prepared, pending submission | `marketplace/README.md` |
 | **Python integration** | FastAPI + DB + agent | ⏳ in progress | `TODO-PYTHON-TEAM.md` |
 
 ---
@@ -184,9 +206,10 @@ bundle is installed into MAT on first use).
   `mcp-server/scripts/vendor-bundle.sh`, otherwise the wheel ships a stale bundle.
 - On first use the MCP server writes `com.jvmind.mat.query` into MAT's
   `plugins/` and `bundles.info`; the MAT install must be writable.
-- Smithery uses an MCPB bundle with the `uv` runtime (Python dependencies are
-  downloaded, not bundled). The Docker image is for directory review; real
-  analysis still needs MAT + JDK 21 on the host.
+- Smithery is skipped for now: its web UI only exposes remote HTTPS URLs and
+  the CLI server-creation endpoint was removed. MCPB artifacts are kept for a
+  later retry. The Docker image is for directory review; real analysis still
+  needs MAT + JDK 21 on the host.
 
 ---
 
@@ -196,7 +219,7 @@ bundle is installed into MAT on first use).
 - **MCP server**: Python 3.10+ / MCP Python SDK 2.x / `uv` / stdio
 - **Platform/agent**: Python + FastAPI (the existing JVMind platform)
 - **Storage**: NFS (dump files) + PostgreSQL (tasks/reports)
-- **Distribution**: PyPI + official MCP Registry; Smithery, mcp.so, Glama, and
-  PulseMCP materials are prepared
+- **Distribution**: PyPI + official MCP Registry; mcp.so, Glama, and PulseMCP
+  materials are prepared; Smithery is skipped
 - **License**: MIT for this project (see [LICENSE](./LICENSE)); Eclipse MAT is
   EPL-2.0 and is not redistributed

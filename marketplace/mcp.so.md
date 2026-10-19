@@ -38,6 +38,8 @@ binds to `127.0.0.1` only.
 query bundle into MAT on first use.
 
 **Install:** `uvx jvmind-mat-mcp`
+
+The repository README lists all 17 tools under the `## Tools` heading.
 ```
 
 Client configuration to show on the listing:
@@ -60,6 +62,10 @@ Client configuration to show on the listing:
 ## Notes
 
 - Sign-in is required to submit.
+- mcp.so auto-extracts tools from a `## Tools` heading in the repository
+  README. The root `README.md` / `README.en.md` now have that section, so the
+  listing should show all 17 tools after submission. Wait until the README
+  change is pushed to the default branch.
 - A logo/icon is optional but improves the card. No icon is committed yet.
 - The listing should mention that analysis is local and requires MAT; this
   avoids users expecting a hosted service.

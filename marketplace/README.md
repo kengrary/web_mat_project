@@ -4,7 +4,7 @@ Canonical metadata for every directory: [`metadata.json`](./metadata.json).
 
 | Directory | Mechanism | Public repo | Artifact / status |
 |---|---|---|---|
-| [Smithery](./smithery.md) | MCPB bundle upload | ✓ public | `mcp-server/dist/jvmind-mat-mcp-0.1.1.mcpb` — built & validated; Smithery login pending |
+| [Smithery](./smithery.md) | Local MCPB upload | ✓ public | **Skipped**: the dashboard only offers remote HTTPS URLs; the CLI create endpoint was removed |
 | [mcp.so](./mcp.so.md) | Web form (free review or $39 paid) | ✓ public | Copy ready; account + form submission pending |
 | [Glama](./glama.md) | Web form + Dockerfile | ✓ public | Copy + Dockerfile ready; account + form submission pending |
 | [PulseMCP](./pulsemcp.md) | Official Registry ingest / web form | ✓ public | Likely automatic; check in browser |
@@ -19,18 +19,21 @@ Already published:
 
 ## Repository visibility
 
-`kengrary/web_mat_project` is **public**. The mcp.so, Glama, and Smithery
-requirements that depended on a public repository are satisfied.
+`kengrary/web_mat_project` is **public**. The mcp.so and Glama requirements
+that depended on a public repository are satisfied.
 
 Remaining manual steps:
 
-1. **Smithery** — `npx --yes smithery auth login`, then publish the MCPB bundle.
-2. **mcp.so** — sign in, submit the MCP Server form with the values in
+1. **mcp.so** — sign in, submit the MCP Server form with the values in
    [`mcp.so.md`](./mcp.so.md).
-3. **Glama** — sign in, Add Server, then provide `mcp-server/Dockerfile` when
+2. **Glama** — sign in, Add Server, then provide `mcp-server/Dockerfile` when
    their review email arrives.
-4. **PulseMCP** — check in a browser; the server should be picked up from the
+3. **PulseMCP** — check in a browser; the server should be picked up from the
    official Registry.
+
+**Smithery is skipped for now.** Its dashboard only exposes the remote HTTPS
+URL flow, and its CLI/API server-creation endpoint returns
+`403 Updating servers has been removed`.
 
 ## MCPRush
 
@@ -45,19 +48,29 @@ listing currently shows:
 
 A publisher account / live scan can improve the tool surface metadata.
 
+## Smithery (skipped)
+
+The local MCPB artifacts are kept in [`smithery.md`](./smithery.md) for a future
+retry, but Smithery is not part of the current rollout:
+
+- The web dashboard only publishes remote HTTPS MCP servers.
+- The CLI server-creation endpoint returns `403 Updating servers has been removed`.
+- There is no local stdio/MCPB entry point in the current UI.
+
 ## Quality gaps
 
 - **License:** MIT is now added at the repository root and in `mcp-server/`,
   and the MCPB manifest declares MIT. PyPI 0.1.1 includes the MIT metadata; MCPRush will pick it up on rescan.
-- **Icon:** optional but recommended for mcp.so/Smithery cards.
-- **Smithery verification:** needs a logged-in Smithery account.
+- **Icon:** optional but recommended for mcp.so cards.
 - **MCPRush tool metadata:** a runtime scan would capture descriptions and
   input schemas that the static scan skipped.
 
 ## Verification performed
 
-- MCPB manifest schema validation passes (`mcpb validate`).
-- Bundle packs to 275 KB and unpacks cleanly.
-- Bundle runs through the `uv` runtime (including `uv.lock`) and completes MCP
-  `initialize` with 17 tools.
+- Standard MCPB manifest schema validation passes (`mcpb validate`).
+- Standard and Smithery bundles unpack cleanly (about 277 KB each).
+- The bundle runs through the `uv` runtime (including `uv.lock`) and completes
+  MCP `initialize` with 17 tools.
 - CI builds the MCPB and the Docker image successfully.
+- The Smithery extended manifest has all 17 `inputSchema` objects; it is kept
+  for a future retry if Smithery restores local MCPB publishing.

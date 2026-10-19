@@ -18,8 +18,9 @@ service binds to `127.0.0.1` only.
 - MCPRush: <https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp>
 - Install: `uvx jvmind-mat-mcp doctor`
 
-Directory listings (Smithery, mcp.so, Glama, PulseMCP) are prepared but not
-live yet; see [`../marketplace/README.md`](../marketplace/README.md).
+Directory listings (mcp.so, Glama, PulseMCP) are prepared but not live yet.
+Smithery is skipped because its current web UI has no local MCPB flow; see
+[`../marketplace/README.md`](../marketplace/README.md).
 
 ## Requirements
 
@@ -110,6 +111,28 @@ Restart the client after changing the configuration.
 
 Tools accept an object id in decimal or `0x`-prefixed hex. Values shown as
 `retained` may be approximate (MAT's dominator-tree lower bound).
+
+## Tools
+
+All analysis tools take the `report_id` returned by `open_heapdump`.
+
+- `open_heapdump` — open a local `.hprof`, start background indexing, return a `report_id`
+- `get_heapdump_status` — poll parse status, progress, and phase
+- `list_heapdumps` — list heap dumps known to this MCP server
+- `close_heapdump` — release a heap dump handle and optionally stop the MAT helper
+- `mat_overview` — heap overview: used/committed/live heap, object/class/classloader counts, JDK version
+- `mat_histogram` — class histogram sorted by shallow, retained, or object count
+- `mat_dominator` — dominator tree of the largest retained objects, with parent drill-down
+- `mat_threads` — list threads or drill into stack frames and frame locals
+- `mat_threadlocals` — inspect ThreadLocal values grouped by value class or thread
+- `mat_object` — inspect a single object's fields, statics, references, and GC root
+- `mat_path2gc` — shortest path from an object to a GC root
+- `mat_oql` — run an OQL query and return rows plus a reusable result set id
+- `mat_leak_suspects` — run LeakHunter and return suspects with retained sizes and descriptions
+- `mat_diagnose_oom` — composite OOM diagnosis: leak suspects + SQL in threads + dominator analysis
+- `mat_connection_pools` — diagnose database connection pools and leaked connections
+- `mat_top_consumers` — top memory consumers by retained heap
+- `mat_sql_in_threads` — find SQL statements in thread stacks
 
 ## Configuration
 
@@ -223,9 +246,10 @@ python -m twine check dist/*.whl dist/*.tar.gz
 mcp-publisher validate
 ```
 
-Marketplace packs (Smithery MCPB, mcp.so/Glama/PulseMCP copy) live in
-[`../marketplace/README.md`](../marketplace/README.md). The Smithery bundle is a
-`uv`-runtime MCPB pinned by `uv.lock`; build it with:
+Marketplace packs (mcp.so/Glama/PulseMCP copy) live in
+[`../marketplace/README.md`](../marketplace/README.md). The Smithery MCPB is kept
+for a future retry (its local publishing flow is currently unavailable); it runs
+the Python package via `uv` and is pinned by `uv.lock`. Build both bundles with:
 
 ```bash
 mcp-server/scripts/build-mcpb.sh

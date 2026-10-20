@@ -1,189 +1,225 @@
-# JVMind × MAT — Heapdump 智能分析模块
+# JVMind × MAT — Heap Dump Analysis
 
-**中文** | [English](./README.en.md)
+**English** | [中文](./README.zh.md)
 
-> 基于 Eclipse Memory Analyzer (MAT) 内核，为现有 JVMind 平台增加 **Java 堆转储（heapdump）分析能力**：
-> 上传 → 解析 → 类 MAT 的 Web 查询 → 领域诊断（连接池泄漏等）→ 自然语言 Agent 诊断。
+> Java heap dump analysis built on the Eclipse Memory Analyzer (MAT) engine:
+> upload → parse → MAT-like web queries → domain diagnostics (connection-pool
+> leaks and more) → natural-language agent diagnosis.
 >
-> **当前状态**：Java 侧（解析 + 查询服务）已实测跑通；MCP Server `v0.1.1` 已发布到 PyPI 与官方 MCP Registry；Python 平台串通待开发。详见 [PROJECT-STATUS.md](./PROJECT-STATUS.md)。
+> **Status**: the Java parser and query service are tested. MCP Server `v0.1.1`
+> is published on PyPI and the official MCP Registry. Python platform
+> integration is still in progress. See [PROJECT-STATUS.md](./PROJECT-STATUS.md).
 
 ---
 
-## 🚀 新人 5 分钟入门
+## Quick start
 
-1. **想了解项目全貌** → 读本文件 +「[mat-study/README.md](./mat-study/README.md)」（项目蓝图）。
-2. **想知道现在做到哪了** → [PROJECT-STATUS.md](./PROJECT-STATUS.md)（已完成 / 待办 / 踩坑经验）。
-3. **是 Python 团队、要接手开发** → [TODO-PYTHON-TEAM.md](./TODO-PYTHON-TEAM.md)（任务清单 + 接口契约 + 验收）。
-4. **想把查询服务跑起来** → [query-service/DEPLOY.md](./query-service/DEPLOY.md)（部署 + curl 验证）。
-5. **想跑通解析** → [parser-cli/v1-parsehd/README.md](./parser-cli/v1-parsehd/README.md)（零编译，发行版即可）。
-6. **想在 Claude/Cursor/VS Code 里分析堆转储** → [mcp-server/README.md](./mcp-server/README.md)（`uvx jvmind-mat-mcp`，本地 stdio）。
+1. **Project overview** → this file + [`mat-study/README.md`](./mat-study/README.md)
+   (the design blueprint; Chinese).
+2. **Current progress** → [PROJECT-STATUS.md](./PROJECT-STATUS.md) (completed work,
+   remaining tasks, lessons learned).
+3. **Python team onboarding** → [TODO-PYTHON-TEAM.md](./TODO-PYTHON-TEAM.md)
+   (task list, API contract, acceptance criteria).
+4. **Run the query service** → [query-service/DEPLOY.md](./query-service/DEPLOY.md)
+   (deploy + curl verification).
+5. **Run the parser** → [parser-cli/v1-parsehd/README.md](./parser-cli/v1-parsehd/README.md)
+   (no build required; uses the MAT distribution).
+6. **Analyze heap dumps from Claude/Cursor/VS Code** →
+   [mcp-server/README.md](./mcp-server/README.md) (`uvx jvmind-mat-mcp`, local stdio).
 
 ---
 
-## ⚡ MCP Server（已发布）
+## MCP Server (published)
 
-本地 stdio MCP Server，把 MAT 的堆分析能力直接接到 Claude Desktop / Cursor / VS Code。堆转储不出本机，MAT 辅助服务只绑 `127.0.0.1`。
+A local stdio MCP server that exposes MAT heap analysis to Claude Desktop,
+Cursor, and VS Code. Heap dumps never leave the machine; the MAT helper binds to
+`127.0.0.1` only.
 
 ```bash
-uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
+uvx jvmind-mat-mcp doctor      # checks JDK 21 / MAT 1.17 / permissions
 ```
 
-| 渠道 | 地址 |
+| Channel | Location |
 |---|---|
 | PyPI | <https://pypi.org/project/jvmind-mat-mcp/> |
-| 官方 MCP Registry | `io.github.kengrary/jvmind-mat` |
+| Official MCP Registry | `io.github.kengrary/jvmind-mat` |
 | MCPRush | <https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp> |
-| 使用文档 | [mcp-server/README.md](./mcp-server/README.md) |
+| Documentation | [mcp-server/README.md](./mcp-server/README.md) |
 
-能力：`open_heapdump` → `mat_overview` / `mat_histogram` / `mat_dominator` / `mat_threads` / `mat_object` / `mat_path2gc` / `mat_oql` / `mat_leak_suspects` / `mat_diagnose_oom` 等 17 个工具。
+Capabilities: `open_heapdump` → `mat_overview` / `mat_histogram` /
+`mat_dominator` / `mat_threads` / `mat_object` / `mat_path2gc` / `mat_oql` /
+`mat_leak_suspects` / `mat_diagnose_oom` and more — 17 tools in total.
 
-要求：Python 3.10+、JDK 21+、Eclipse MAT **1.17.x**（首次使用会自动安装一个小型查询 bundle）。
+Requirements: Python 3.10+, JDK 21+, Eclipse MAT **1.17.x** (a small query
+bundle is installed into MAT on first use).
 
 ## Tools
 
-所有分析工具都接收 `open_heapdump` 返回的 `report_id`。
+All analysis tools take the `report_id` returned by `open_heapdump`.
 
-- `open_heapdump` — 打开本地 `.hprof`，后台解析并返回 `report_id`
-- `get_heapdump_status` — 查询解析状态、进度和阶段
-- `list_heapdumps` — 列出本 MCP 服务已知的堆转储
-- `close_heapdump` — 释放堆转储句柄，可选停止 MAT 辅助进程
-- `mat_overview` — 堆总览：已用/已提交/存活堆、对象/类/类加载器数量、JDK 版本
-- `mat_histogram` — 类直方图，按 shallow / retained / count 排序
-- `mat_dominator` — 支配树，列出 retained 最大的对象并支持按 parent 下钻
-- `mat_threads` — 线程列表，或下钻线程栈帧和 frame locals
-- `mat_threadlocals` — 按 valueClass 或 thread 分组查看 ThreadLocal
-- `mat_object` — 检查单个对象的字段、静态字段、入/出引用和 GC Root
-- `mat_path2gc` — 对象到 GC Root 的最短路径
-- `mat_oql` — 执行 OQL 查询，返回行和可复用的 resultSetId
-- `mat_leak_suspects` — 运行 LeakHunter，返回泄漏嫌疑、retained 大小和描述
-- `mat_diagnose_oom` — 综合 OOM 诊断：泄漏嫌疑 + 线程 SQL + 支配树分析
-- `mat_connection_pools` — 诊断数据库连接池和超时未释放的连接
-- `mat_top_consumers` — 按 retained heap 排序的内存占用 Top
-- `mat_sql_in_threads` — 在线程栈中查找 SQL，定位 OOM 时的慢查询
+- `open_heapdump` — open a local `.hprof`, start background indexing, return a `report_id`
+- `get_heapdump_status` — poll parse status, progress, and phase
+- `list_heapdumps` — list heap dumps known to this MCP server
+- `close_heapdump` — release a heap dump handle and optionally stop the MAT helper
+- `mat_overview` — heap overview: used/committed/live heap, object/class/classloader counts, JDK version
+- `mat_histogram` — class histogram sorted by shallow, retained, or object count
+- `mat_dominator` — dominator tree of the largest retained objects, with parent drill-down
+- `mat_threads` — list threads or drill into stack frames and frame locals
+- `mat_threadlocals` — inspect ThreadLocal values grouped by value class or thread
+- `mat_object` — inspect a single object's fields, statics, references, and GC root
+- `mat_path2gc` — shortest path from an object to a GC root
+- `mat_oql` — run an OQL query and return rows plus a reusable result set id
+- `mat_leak_suspects` — run LeakHunter and return suspects with retained sizes and descriptions
+- `mat_diagnose_oom` — composite OOM diagnosis: leak suspects + SQL in threads + dominator analysis
+- `mat_connection_pools` — diagnose database connection pools and leaked connections
+- `mat_top_consumers` — top memory consumers by retained heap
+- `mat_sql_in_threads` — find SQL statements in thread stacks
 
 ---
 
-## 架构一图
+## Architecture
 
 ```
-  用户上传 heapdump
+  User uploads a heap dump
         │
-   [Python/FastAPI]  ← 待开发(TODO-PYTHON-TEAM.md)
-   上传/队列/进度/鉴权/Agent
-        ├── fork ─────────────▶ [parser-cli / V1]  hprof → *.index   ✅已实测
-        │                              （写 NFS）
-        └── 内网反代 ──────────▶ [query-service]    读 index 提供查询  ✅已跑通
+   [Python/FastAPI]  ← in progress (TODO-PYTHON-TEAM.md)
+   upload / queue / progress / auth / agent
+        ├── fork ─────────────▶ [parser-cli / V1]  hprof → *.index   ✅ tested
+        │                              (writes to NFS)
+        └── reverse proxy ────▶ [query-service]    queries over indexes  ✅ tested
                                   (OSGi bundle, :8090)
-                                  histogram/支配树/线程树/OQL
-                                  + Leak Suspects/path2gc 等
-         共享：NFS(dump 文件) + PostgreSQL(任务/报告)
+                                  histogram / dominators / threads / OQL
+                                  + Leak Suspects / path2gc etc.
+         Shared: NFS (dump files) + PostgreSQL (tasks/reports)
 
-  本机 MCP 路径（v0.1.1 已发布）：
+  Local MCP path (v0.1.1 published):
   Claude Desktop / Cursor / VS Code
         │ stdio
         ▼
    [mcp-server] ──HTTP 127.0.0.1──▶ [query-service :8090]
-        └── 缺 index 时自动调用 MAT ParseHeapDump（复用 parser-cli V1 逻辑）
+        └── runs MAT ParseHeapDump when index files are missing
+            (reuses the parser-cli V1 logic)
 ```
 
 ---
 
-## 目录结构与文档导航
+## Repository layout
 
-### 📁 顶层
-| 文件 | 内容 |
+### Top level
+
+| File | Contents |
 |---|---|
-| [README.md](./README.md) | 本文件，总索引（中文） |
-| [README.en.md](./README.en.md) | English overview |
-| [PROJECT-STATUS.md](./PROJECT-STATUS.md) | 总进度：里程碑、模块状态、待办、**踩坑经验**（必读） |
-| [TODO-PYTHON-TEAM.md](./TODO-PYTHON-TEAM.md) | 给 Python 团队的串通任务清单（表/上传/队列/反代/agent + 验收 + 参考物料） |
+| [README.md](./README.md) | English overview (this file) |
+| [README.zh.md](./README.zh.md) | Chinese overview |
+| [PROJECT-STATUS.md](./PROJECT-STATUS.md) | Milestones, module status, TODOs, lessons learned |
+| [TODO-PYTHON-TEAM.md](./TODO-PYTHON-TEAM.md) | Python integration task list, API contract, acceptance |
 
-### 📁 mat-study/ — 设计文档（从研究到落地）
-| # | 文档 | 解决什么 |
+### `mat-study/` — design documents (Chinese)
+
+| # | Document | What it covers |
 |---|---|---|
-| — | [README.md](./mat-study/README.md) | **项目蓝图入口**（四层架构、决策表、里程碑） |
-| 01 | [MAT源码研究与架构设计](./mat-study/01-MAT源码研究与架构设计.md) | MAT 怎么实现、怎么复用；index 文件格式 |
-| 02 | [核心算法深挖与落地方案](./mat-study/02-核心算法深挖与落地方案.md) | 支配树/路径/retained 算法；Web 后端怎么搭 |
-| 03 | [超越OOM-连接池泄漏排查](./mat-study/03-超越OOM-连接池泄漏等问题排查思路.md) | 堆镜像还能查什么；连接池/线程池/ClassLoader 诊断 |
-| 04 | [接口工具化-诊断Agent思路](./mat-study/04-MAT接口工具化-自然语言诊断Agent思路.md) | LLM 怎么驱动 MAT；工具粒度/出参瘦身 |
-| 05 | [全链路系统集成设计](./mat-study/05-全链路系统集成设计.md) | 上传/队列/进度/三层软引用防 OOM |
-| 06 | [技术选型确认与四大视图API](./mat-study/06-技术选型确认与四大视图API设计.md) | 选型固化 + 四大视图 API 契约 |
-| 07 | [与现有JVMind系统对接](./mat-study/07-与现有JVMind系统对接落地方案.md) | 如何接入现有平台（**Python 团队必读**） |
-| 08 | [MAT功能盘点与实现缺口](./mat-study/08-MAT功能盘点与实现缺口.md) | 57 个 query 盘点 + 缺口优先级 |
-| 09 | [前端实现建议-复刻MAT体验](./mat-study/09-前端实现建议-复刻MAT体验.md) | Web 前端怎么接近 MAT 体验（通用建议）|
-| 10 | [MAT-Inspector能力盘点](./mat-study/10-MAT-Inspector能力盘点与实现建议.md) | Inspector 全部能力 + 已实现项 |
-| 12 | [Python串通执行计划](./mat-study/12-Python串通执行计划.md) | Python 接入 Java 侧分阶段计划 |
-| 13 | [OOM线程级诊断思路](./mat-study/13-OOM线程级诊断思路.md) | OOM 触发线程识别 + SQL 提取（超越 MAT）|
-| 14 | [heapdump前端落地设计-对齐真实端点](./mat-study/14-heapdump前端落地设计-对齐真实端点.md) | 前端**可执行**落地（端点映射+异步状态机+集成红线，**前端团队必读**）|
+| — | [README.md](./mat-study/README.md) | Design blueprint (four-layer architecture, decisions, milestones) |
+| 01 | [MAT source study and architecture](./mat-study/01-MAT源码研究与架构设计.md) | How MAT works and how to reuse it; index file format |
+| 02 | [Core algorithms and implementation](./mat-study/02-核心算法深挖与落地方案.md) | Dominator tree, paths, retained size; web backend design |
+| 03 | [Beyond OOM: connection-pool leaks](./mat-study/03-超越OOM-连接池泄漏等问题排查思路.md) | What else a heap dump can answer; pools, thread pools, classloaders |
+| 04 | [Tooling the MAT API for agents](./mat-study/04-MAT接口工具化-自然语言诊断Agent思路.md) | How an LLM drives MAT; tool granularity and output trimming |
+| 05 | [End-to-end integration design](./mat-study/05-全链路系统集成设计.md) | Upload, queue, progress, three-layer soft-reference cache |
+| 06 | [Technology choices and four-view API](./mat-study/06-技术选型确认与四大视图API设计.md) | Finalized choices and the four-view API contract |
+| 07 | [Integrating with JVMind](./mat-study/07-与现有JVMind系统对接落地方案.md) | How to connect to the existing platform (required for the Python team) |
+| 08 | [MAT feature inventory and gaps](./mat-study/08-MAT功能盘点与实现缺口.md) | 57 queries reviewed; gap priorities |
+| 09 | [Frontend implementation guidance](./mat-study/09-前端实现建议-复刻MAT体验.md) | Making the web UI feel like MAT |
+| 10 | [MAT Inspector capabilities](./mat-study/10-MAT-Inspector能力盘点与实现建议.md) | Inspector features and what is already implemented |
+| 12 | [Python integration plan](./mat-study/12-Python串通执行计划.md) | Phased plan for the Python side |
+| 13 | [Thread-level OOM diagnosis](./mat-study/13-OOM线程级诊断思路.md) | Finding the OOM-triggering thread and its SQL |
+| 14 | [Heap dump frontend design](./mat-study/14-heapdump前端落地设计-对齐真实端点.md) | Endpoint mapping, async state machine, integration rules |
 
-### 📁 parser-cli/ — 解析层（hprof → index）
-| 文件 | 内容 |
-|---|---|
-| [README.md](./parser-cli/README.md) | 解析器总览（V1/V2 两版路线） |
-| [MAT-DEPENDENCIES.md](./parser-cli/MAT-DEPENDENCIES.md) | **MAT 依赖怎么拿**（版本↔JDK、三种获取方式、bundle 清单） |
-| [v1-parsehd/README.md](./parser-cli/v1-parsehd/README.md) | **V1 方案**（零编译，发行版 ParseHeapDump + 文本进度）★当前用 |
-| [v1-parsehd/VERIFICATION.md](./parser-cli/v1-parsehd/VERIFICATION.md) | V1 实测报告（真实 hprof 跑通 + 修了 3 个 bug） |
-| `v1-parsehd/mat_parse_runner.py` | 进度解析器（Python，已实测，供 worker 复用） |
-| `python-worker-snippet.py` | worker 调解析器的可用片段 |
-| `src/.../*.java` | V2 骨架（自写 jar + JSONL 进度，待切换） |
+### `parser-cli/` — parsing layer (hprof → index)
 
-### 📁 query-service/ — 查询层（OSGi bundle，:8090）✅ 已跑通
-| 文件 | 内容 |
+| File | Contents |
 |---|---|
-| [README.md](./query-service/README.md) | 服务总览（端点、SnapshotManager 三层软引用、路线2） |
-| [DEPLOY.md](./query-service/DEPLOY.md) | **部署 + 端到端验证**（bundles.info 注册 + -clean；curl 示例）★实操看这个 |
-| [EQUINOX-A-VERIFICATION.md](./query-service/EQUINOX-A-VERIFICATION.md) | Equinox 嵌入实测 + CNF 缺陷修正（为什么选路线2） |
-| [BUILD-TROUBLESHOOTING.md](./query-service/BUILD-TROUBLESHOOTING.md) | 构建排错（p2 仓库、JDK 版本匹配） |
-| `src/.../*.java` (21 个) | 服务实现：core/http/model/task/view/equinox |
+| [README.md](./parser-cli/README.md) | Parser overview (V1/V2 routes) |
+| [MAT-DEPENDENCIES.md](./parser-cli/MAT-DEPENDENCIES.md) | How to obtain MAT dependencies, version/JDK matrix, bundle list |
+| [v1-parsehd/README.md](./parser-cli/v1-parsehd/README.md) | **V1** (zero build; MAT distribution + text progress) — current |
+| [v1-parsehd/VERIFICATION.md](./parser-cli/v1-parsehd/VERIFICATION.md) | V1 verification report (real hprof, three bugs fixed) |
+| `v1-parsehd/mat_parse_runner.py` | Progress parser (Python; reusable by the worker) |
+| `python-worker-snippet.py` | Worker snippet for calling the parser |
+| `src/.../*.java` | V2 skeleton (self-built jar + JSONL progress; not active) |
 
-### 📁 mcp-server/ — 本地 stdio MCP（✅ v0.1.1 已发布）
-| 文件 | 内容 |
-|---|---|
-| [README.md](./mcp-server/README.md) | 安装、客户端配置、17 个工具、隐私与排错 |
-| `src/jvmind_mat_mcp/server.py` | MCP SDK 工具注册入口 |
-| `src/jvmind_mat_mcp/engine.py` | 堆转储注册、后台解析、MAT 服务生命周期 |
-| `src/jvmind_mat_mcp/vendor/` | 随包分发的 query-service OSGi bundle |
-| [Dockerfile](./mcp-server/Dockerfile) | Glama 审核用镜像（不含 MAT/JDK，运行时挂载） |
-| `tests/` | 单测 + stdio 协议测试 + 可选真实 MAT 集成测试 |
+### `query-service/` — query layer (OSGi bundle, :8090) ✅
 
-### 📁 marketplace/ — 市场提交材料（🟡 准备完成，尚未提交）
-| 文件 | 内容 |
+| File | Contents |
 |---|---|
-| [README.md](./marketplace/README.md) | 各平台状态、剩余步骤、质量缺口 |
-| [metadata.json](./marketplace/metadata.json) | 统一名称/描述/标签/安装命令 |
-| `smithery/manifest.json` | MCPB manifest（Smithery 暂跳过，保留备用） |
-| [mcp.so.md](./marketplace/mcp.so.md) / [glama.md](./marketplace/glama.md) / [pulsemcp.md](./marketplace/pulsemcp.md) | 各平台表单文案与步骤 |
+| [README.md](./query-service/README.md) | Service overview (endpoints, SnapshotManager, route 2) |
+| [DEPLOY.md](./query-service/DEPLOY.md) | **Deploy + end-to-end verification** (bundles.info + `-clean`, curl examples) |
+| [EQUINOX-A-VERIFICATION.md](./query-service/EQUINOX-A-VERIFICATION.md) | Embedded Equinox test and CNF fix (why route 2) |
+| [BUILD-TROUBLESHOOTING.md](./query-service/BUILD-TROUBLESHOOTING.md) | Build troubleshooting (p2 repositories, JDK versions) |
+| `src/.../*.java` (21 files) | Service implementation: core/http/model/task/view/equinox |
+
+### `mcp-server/` — local stdio MCP (✅ v0.1.1 published)
+
+| File | Contents |
+|---|---|
+| [README.md](./mcp-server/README.md) | Install, client config, 17 tools, privacy, troubleshooting |
+| `src/jvmind_mat_mcp/server.py` | MCP SDK tool registration |
+| `src/jvmind_mat_mcp/engine.py` | Heap dump registry, background parsing, MAT lifecycle |
+| `src/jvmind_mat_mcp/vendor/` | Query-service OSGi bundle shipped with the package |
+| [Dockerfile](./mcp-server/Dockerfile) | Glama review image (MAT/JDK not included; mount at runtime) |
+| `tests/` | Unit tests, stdio protocol tests, optional real-MAT integration tests |
+
+### `marketplace/` — directory submission pack (🟡 prepared, not submitted)
+
+| File | Contents |
+|---|---|
+| [README.md](./marketplace/README.md) | Platform status, remaining steps, quality gaps |
+| [metadata.json](./marketplace/metadata.json) | Shared name, description, tags, install command |
+| `smithery/manifest.json` | MCPB manifest (Smithery skipped, kept for later) |
+| [mcp.so.md](./marketplace/mcp.so.md) / [glama.md](./marketplace/glama.md) / [pulsemcp.md](./marketplace/pulsemcp.md) | Form copy and steps per platform |
 
 ---
 
-## 模块速查
+## Module status
 
-| 模块 | 形态 | 状态 | 关键入口文件 |
+| Module | Form | Status | Entry point |
 |---|---|---|---|
-| **parser-cli** | V1=发行版命令；V2=独立 jar | ✅ V1 实测可用 | `v1-parsehd/mat_parse_runner.py` |
-| **query-service** | OSGi bundle (HTTP :8090) | ✅ 已跑通+实测 | `QueryServiceApp.java` / `QueryHttpServer.java` |
-| **mcp-server** | Python stdio MCP（PyPI + 官方 Registry） | ✅ v0.1.1 已发布 | `src/jvmind_mat_mcp/server.py` |
-| **marketplace** | 目录提交材料（Smithery 暂跳过） | 🟡 准备完成，待提交 | `marketplace/README.md` |
-| **Python 串通** | FastAPI + DB + agent | ⏳ 待开发 | 见 `TODO-PYTHON-TEAM.md` |
+| **parser-cli** | V1 = MAT command; V2 = standalone jar | ✅ V1 tested | `v1-parsehd/mat_parse_runner.py` |
+| **query-service** | OSGi bundle (HTTP :8090) | ✅ tested | `QueryServiceApp.java` / `QueryHttpServer.java` |
+| **mcp-server** | Python stdio MCP (PyPI + official Registry) | ✅ v0.1.1 published | `src/jvmind_mat_mcp/server.py` |
+| **marketplace** | Directory copy (Smithery skipped) | 🟡 prepared, pending submission | `marketplace/README.md` |
+| **Python integration** | FastAPI + DB + agent | ⏳ in progress | `TODO-PYTHON-TEAM.md` |
 
 ---
 
-## 关键事实速记（避免重复踩坑，详见 PROJECT-STATUS.md）
-- MAT 依赖不在 Maven Central → 用 Tycho（`eclipse-plugin`）+ p2/Directory，不写 `<dependencies>`。
-- 版本↔JDK：**1.17→JDK21**、1.14→JDK17、1.12→JDK11（三处须一致）。
-- 部署：jar 放 `plugins/` + `bundles.info` 加一行（auto-start=true）+ **`-clean`** 重启（不是 dropins）。
-- 查询服务无鉴权，仅内网；由 Python 反代时带 `dumpDir`（= dump 目录）。
-- reopen 需要 hprof + index 都在可随机 seek 的文件系统（NFS 满足）。
-- MCP 包名 `jvmind-mat-mcp`，Registry 名 `io.github.kengrary/jvmind-mat`；改完 Java 查询层后必须重跑 `mcp-server/scripts/vendor-bundle.sh`，否则 wheel 里的 bundle 会过期。
-- MCP Server 首次使用会把 `com.jvmind.mat.query` 写入 MAT 的 `plugins/` + `bundles.info`；MAT 安装目录必须可写。
-- Smithery 暂跳过（网页端只有远程 URL 入口，CLI 创建接口已移除）；MCPB 材料保留备用。Docker 镜像只用于目录审核，真实分析仍需本机 MAT + JDK 21。
+## Key facts (avoid re-learning these)
+
+- MAT dependencies are not on Maven Central → use Tycho (`eclipse-plugin`) with a
+  p2 repository or a local Directory target; do not add `<dependencies>`.
+- Version ↔ JDK: **1.17 → JDK 21**, 1.14 → JDK 17, 1.12 → JDK 11 (keep all
+  three places in sync).
+- Deployment: copy the jar into `plugins/`, add a line to `bundles.info`
+  (auto-start=true), and restart with **`-clean`** (not `dropins/`).
+- The query service has no authentication and is intranet-only. The Python proxy
+  injects `dumpDir` (= the dump directory).
+- Reopening a dump requires both the hprof and index files on a seekable
+  filesystem (NFS works).
+- MCP package `jvmind-mat-mcp`; Registry name `io.github.kengrary/jvmind-mat`.
+  After changing the Java query layer, rerun
+  `mcp-server/scripts/vendor-bundle.sh`, otherwise the wheel ships a stale bundle.
+- On first use the MCP server writes `com.jvmind.mat.query` into MAT's
+  `plugins/` and `bundles.info`; the MAT install must be writable.
+- Smithery is skipped for now: its web UI only exposes remote HTTPS URLs and
+  the CLI server-creation endpoint was removed. MCPB artifacts are kept for a
+  later retry. The Docker image is for directory review; real analysis still
+  needs MAT + JDK 21 on the host.
 
 ---
 
-## 技术栈
-- **解析/查询**：Java 21 + Eclipse MAT 1.17（OSGi/Equinox）
-- **MCP Server**：Python 3.10+ / MCP Python SDK 2.x / `uv` / stdio
-- **主控/上传/Agent**：Python + FastAPI（现有 JVMind 平台）
-- **存储**：NFS（dump 文件）+ PostgreSQL（任务/报告，双进程共享）
-- **分发**：PyPI + 官方 MCP Registry；mcp.so/Glama/PulseMCP 材料已准备，Smithery 暂跳过
-- **许可证**：本项目代码为 MIT（见 [LICENSE](./LICENSE)）；MAT 为 EPL-2.0（复用其 bundle，注意分发声明）
+## Tech stack
+
+- **Parsing/query**: Java 21 + Eclipse MAT 1.17 (OSGi/Equinox)
+- **MCP server**: Python 3.10+ / MCP Python SDK 2.x / `uv` / stdio
+- **Platform/agent**: Python + FastAPI (the existing JVMind platform)
+- **Storage**: NFS (dump files) + PostgreSQL (tasks/reports)
+- **Distribution**: PyPI + official MCP Registry; mcp.so, Glama, and PulseMCP
+  materials are prepared; Smithery is skipped
+- **License**: MIT for this project (see [LICENSE](./LICENSE)); Eclipse MAT is
+  EPL-2.0 and is not redistributed

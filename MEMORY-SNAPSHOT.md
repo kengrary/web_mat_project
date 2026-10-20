@@ -1,7 +1,7 @@
 # 记忆快照 — 项目恢复指南（压缩记忆）
 
 > 读这一份即可恢复全部上下文。最后更新：query-service 全面跑通 + /tools 优化 + 前端原型之后。
-> 详情入口永远是根目录 [README.md](./README.md) 与 [PROJECT-STATUS.md](./PROJECT-STATUS.md)。
+> 详情入口永远是根目录 [README.zh.md](./README.zh.md) / [README.md](./README.md) 与 [PROJECT-STATUS.md](./PROJECT-STATUS.md)。
 
 ## 一句话
 为现有 **JVMind 平台**（Python/FastAPI + 自写 ReAct agent + 已有 GC日志/jstack 分析）增加

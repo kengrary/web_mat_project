@@ -63,7 +63,7 @@ Client configuration to show on the listing:
 
 - Sign-in is required to submit.
 - mcp.so auto-extracts tools from a `## Tools` heading in the repository
-  README. The root `README.md` / `README.en.md` now have that section, so the
+  README. The root `README.md` / `README.zh.md` now have that section, so the
   listing should show all 17 tools after submission. Wait until the README
   change is pushed to the default branch.
 - A logo/icon is optional but improves the card. No icon is committed yet.

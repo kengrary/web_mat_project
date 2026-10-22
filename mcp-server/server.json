@@ -2,17 +2,17 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.kengrary/jvmind-mat",
   "title": "JVMind MAT Heap Dump Analyzer",
-  "description": "Analyze Java heap dumps locally with Eclipse MAT.",
+  "description": "Analyze Java heap dumps locally with Eclipse MAT, including live JVM capture.",
   "repository": {
     "url": "https://github.com/kengrary/web_mat_project",
     "source": "github"
   },
-  "version": "0.1.1",
+  "version": "0.2.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "jvmind-mat-mcp",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "transport": {
         "type": "stdio"
       }

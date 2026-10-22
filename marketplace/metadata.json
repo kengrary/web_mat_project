@@ -2,8 +2,8 @@
   "name": "JVMind MAT Heap Dump Analyzer",
   "slug": "jvmind-mat",
   "tagline": "Analyze Java heap dumps locally with Eclipse MAT.",
-  "description_short": "Local MCP server for Java heap dump analysis with Eclipse MAT: histograms, dominators, threads, OQL, leak suspects, and OOM diagnosis.",
-  "description_long": "JVMind MAT runs Eclipse MAT on your machine and exposes its analysis as MCP tools. Open a .hprof file, wait for background indexing, then inspect the heap overview, class histogram, dominator tree, thread stacks, ThreadLocals, individual objects, GC paths, OQL results, LeakHunter suspects, OOM diagnosis, connection pools, top consumers, and SQL in threads.\n\nEverything stays local: heap dumps never leave the machine, and the MAT helper binds to 127.0.0.1 only.\n\nRequirements: JDK 21 and Eclipse MAT 1.17.x. The server installs a small query bundle into MAT on first use.",
+  "description_short": "Local MCP server for Java heap dump analysis with Eclipse MAT and live JVM capture: histograms, dominators, threads, OQL, leak suspects, and OOM diagnosis.",
+  "description_long": "JVMind MAT runs Eclipse MAT on your machine and exposes its analysis as MCP tools. Discover local Java processes and capture a live heap dump from a running JVM, or open an existing .hprof file. Inspect the heap overview, class histogram, dominator tree, thread stacks, ThreadLocals, individual objects, GC paths, OQL results, LeakHunter suspects, OOM diagnosis, connection pools, top consumers, and SQL in threads.\n\nEverything stays local: heap dumps never leave the machine, and the MAT helper binds to 127.0.0.1 only. Live dumps trigger a Full GC and may pause the target JVM.\n\nRequirements: JDK 21 and Eclipse MAT 1.17.x. The server installs a small query bundle into MAT on first use.",
   "repository": "https://github.com/kengrary/web_mat_project",
   "homepage": "https://pypi.org/project/jvmind-mat-mcp/",
   "pypi": "https://pypi.org/project/jvmind-mat-mcp/",
@@ -25,7 +25,10 @@
     "oom",
     "debugging",
     "threads",
-    "oql"
+    "oql",
+    "live-jvm",
+    "heap-dump",
+    "process-discovery"
   ],
   "requirements": [
     "Python 3.10+",
@@ -37,7 +40,9 @@
     "mcpServers": {
       "jvmind-mat": {
         "command": "uvx",
-        "args": ["jvmind-mat-mcp"],
+        "args": [
+          "jvmind-mat-mcp"
+        ],
         "env": {
           "MAT_HOME": "/opt/mat",
           "JVMIND_MAT_XMX": "8g"

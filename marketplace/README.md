@@ -8,12 +8,12 @@ Canonical metadata for every directory: [`metadata.json`](./metadata.json).
 | [mcp.so](./mcp.so.md) | Web form (free review or $39 paid) | ✓ public | Copy ready; account + form submission pending |
 | [Glama](./glama.md) | Web form + Dockerfile | ✓ public | Copy + Dockerfile ready; account + form submission pending |
 | [PulseMCP](./pulsemcp.md) | Official Registry ingest / web form | ✓ public | Likely automatic; check in browser |
-| [MCPRush](https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp) | Auto-indexed | ✓ public | Listed: Grade A, trust 94/100, 17 tools; v0.1.1 rescan pending |
+| [MCPRush](https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp) | Auto-indexed | ✓ public | Listed: Grade A, trust 94/100, 19 tools; v0.2.0 rescan pending |
 
 Already published:
 
-- Official MCP Registry: `io.github.kengrary/jvmind-mat` v0.1.1
-- PyPI: `jvmind-mat-mcp` 0.1.1
+- Official MCP Registry: `io.github.kengrary/jvmind-mat` v0.2.0
+- PyPI: `jvmind-mat-mcp` 0.2.0
 - MCPRush: <https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp>
   (auto-indexed; Grade A, trust 94/100)
 
@@ -40,7 +40,7 @@ URL flow, and its CLI/API server-creation endpoint returns
 MCPRush picked the server up automatically; no submission was required. The
 listing currently shows:
 
-- Grade A, trust score 94/100, 17 tools; v0.1.1 rescan pending
+- Grade A, trust score 94/100, 19 tools; v0.2.0 rescan pending
 - “Source is public, though no licence is declared” — the scan predates the
   MIT `LICENSE`; a rescan or the next PyPI release should clear this
 - Tool descriptions and parameter schemas were not read because the scan was
@@ -59,8 +59,6 @@ retry, but Smithery is not part of the current rollout:
 
 ## Quality gaps
 
-- **License:** MIT is now added at the repository root and in `mcp-server/`,
-  and the MCPB manifest declares MIT. PyPI 0.1.1 includes the MIT metadata; MCPRush will pick it up on rescan.
 - **Icon:** optional but recommended for mcp.so cards.
 - **MCPRush tool metadata:** a runtime scan would capture descriptions and
   input schemas that the static scan skipped.
@@ -68,9 +66,9 @@ retry, but Smithery is not part of the current rollout:
 ## Verification performed
 
 - Standard MCPB manifest schema validation passes (`mcpb validate`).
-- Standard and Smithery bundles unpack cleanly (about 277 KB each).
+- Standard and Smithery bundles unpack cleanly (about 286 KB each).
 - The bundle runs through the `uv` runtime (including `uv.lock`) and completes
-  MCP `initialize` with 17 tools.
+  MCP `initialize` with 19 tools.
 - CI builds the MCPB and the Docker image successfully.
-- The Smithery extended manifest has all 17 `inputSchema` objects; it is kept
+- The Smithery extended manifest has all 19 `inputSchema` objects; it is kept
   for a future retry if Smithery restores local MCPB publishing.

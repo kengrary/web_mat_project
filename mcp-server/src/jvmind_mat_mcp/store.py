@@ -109,6 +109,33 @@ class StateStore:
             data["heapdumps"][report_id] = record
             return dict(record)
 
+    def create_pending(self, path: Path, **metadata: Any) -> dict[str, Any]:
+        target = str(path)
+        with self.transaction() as data:
+            for record in data["heapdumps"].values():
+                if record.get("path") == target:
+                    record.update(metadata)
+                    record["updated_at"] = now_string()
+                    return dict(record)
+            report_id = new_report_id()
+            record = {
+                "report_id": report_id,
+                "path": target,
+                "filename": path.name,
+                "dump_dir": str(path.parent),
+                "mtime": 0.0,
+                "size": 0,
+                "status": "DUMPING",
+                "progress": 0.0,
+                "phase": "DUMPING",
+                "error": None,
+                "created_at": now_string(),
+                "updated_at": now_string(),
+                **metadata,
+            }
+            data["heapdumps"][report_id] = record
+            return dict(record)
+
     def update(self, report_id: str, **fields: Any) -> dict[str, Any] | None:
         with self.transaction() as data:
             record = data["heapdumps"].get(report_id)

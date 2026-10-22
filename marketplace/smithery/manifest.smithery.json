@@ -2,9 +2,9 @@
   "manifest_version": "0.4",
   "name": "jvmind-mat",
   "display_name": "JVMind MAT Heap Dump Analyzer",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Analyze Java heap dumps locally with Eclipse MAT: histograms, dominators, threads, OQL, leak suspects, and OOM diagnosis.",
-  "long_description": "JVMind MAT runs Eclipse MAT on your machine and exposes its analysis as MCP tools. Open a .hprof file, wait for indexing, then inspect the heap overview, class histogram, dominator tree, thread stacks, ThreadLocals, individual objects, GC paths, OQL results, LeakHunter suspects, OOM diagnosis, connection pools, top consumers, and SQL in threads.\n\nRequirements: uv (https://docs.astral.sh/uv/), JDK 21, and Eclipse MAT 1.17.x. The bundle runs the Python package via uv. The server installs a small query bundle into MAT on first use. Heap dumps stay on the local machine; the helper service binds to 127.0.0.1 only.",
+  "long_description": "JVMind MAT runs Eclipse MAT on your machine and exposes its analysis as MCP tools. Discover local Java processes and capture a live heap dump from a running JVM, or open an existing .hprof file. Inspect the heap overview, class histogram, dominator tree, thread stacks, ThreadLocals, individual objects, GC paths, OQL results, LeakHunter suspects, OOM diagnosis, connection pools, top consumers, and SQL in threads.\n\nRequirements: uv (https://docs.astral.sh/uv/), JDK 21, and Eclipse MAT 1.17.x. The bundle runs the Python package via uv. The server installs a small query bundle into MAT on first use. Heap dumps stay on the local machine; the helper service binds to 127.0.0.1 only.",
   "author": {
     "name": "JVMind",
     "url": "https://pypi.org/project/jvmind-mat-mcp/"
@@ -454,6 +454,44 @@
         ],
         "title": "mat_sql_in_threadsArguments",
         "type": "object"
+      }
+    },
+    {
+      "name": "list_java_processes",
+      "description": "Discover local Java processes that can be attached for a live heap dump.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "dump_java_heap",
+      "description": "Capture a live heap dump from a running JVM and start MAT parsing (requires confirm=true).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pid": {
+            "type": "integer",
+            "description": "Target JVM process id from list_java_processes."
+          },
+          "output_dir": {
+            "type": "string",
+            "description": "Directory for the .hprof file. Defaults to the server's current working directory."
+          },
+          "timeout": {
+            "type": "integer",
+            "description": "Dump timeout in seconds (1-3600). Defaults to JVMIND_DUMP_TIMEOUT."
+          },
+          "confirm": {
+            "type": "boolean",
+            "description": "Set true to execute. Omit/false returns a preview."
+          }
+        },
+        "required": [
+          "pid"
+        ],
+        "additionalProperties": false
       }
     }
   ],

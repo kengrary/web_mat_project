@@ -29,6 +29,21 @@ def test_store_roundtrip(tmp_path):
     assert store.list() == []
 
 
+def test_store_pending_dump(tmp_path):
+    store = StateStore(tmp_path)
+    path = tmp_path / "live.hprof"
+    record = store.create_pending(path, pid=1234, source="process", live=True)
+    assert record["status"] == "DUMPING"
+    assert record["pid"] == 1234
+    assert record["source"] == "process"
+    assert record["live"] is True
+    assert store.find_by_path(path)["report_id"] == record["report_id"]
+
+    again = store.create_pending(path, phase="Dumping")
+    assert again["report_id"] == record["report_id"]
+    assert again["phase"] == "Dumping"
+
+
 def test_store_tolerates_corrupt_state(tmp_path):
     (tmp_path / "state.json").write_text("{not json", encoding="utf-8")
     store = StateStore(tmp_path)

@@ -93,5 +93,6 @@ def test_oql_result_set():
 
 def test_parsing_message_variants():
     assert "queued" in parsing_message({"status": "QUEUED"})
+    assert "Dumping" in parsing_message({"status": "DUMPING", "pid": 1234})
     assert "42%" in parsing_message({"status": "PARSING", "progress": 0.42, "phase": "Pass2"})
     assert "失败" in parsing_message({"status": "FAILED", "error": "boom"})

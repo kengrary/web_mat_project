@@ -21,11 +21,11 @@ Open <https://www.pulsemcp.com/submit> in a browser and submit:
 | Field | Value |
 |---|---|
 | Name | `JVMind MAT Heap Dump Analyzer` |
-| Short description | `Analyze Java heap dumps locally with Eclipse MAT: histograms, dominators, threads, OQL, leak suspects, and OOM diagnosis.` |
+| Short description | `Analyze Java heap dumps locally with Eclipse MAT and live JVM capture: histograms, dominators, threads, OQL, leak suspects, and OOM diagnosis.` |
 | Repository | `https://github.com/kengrary/web_mat_project` (or the public mirror) |
 | Package / install | `uvx jvmind-mat-mcp` |
 | Category | Developer Tools |
-| Tags | `mcp`, `heapdump`, `jvm`, `java`, `eclipse-mat`, `memory-leak`, `oom` |
+| Tags | `mcp`, `heapdump`, `live-jvm`, `jvm`, `java`, `eclipse-mat`, `memory-leak`, `oom` |
 | Registry name | `io.github.kengrary/jvmind-mat` |
 
 Long description: copy `description_long` from

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jvmind-mat-mcp"
-version = "0.1.1"
-description = "Local MCP server for Eclipse MAT heapdump analysis"
+version = "0.2.0"
+description = "Local MCP server for Eclipse MAT heapdump analysis and live JVM capture"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

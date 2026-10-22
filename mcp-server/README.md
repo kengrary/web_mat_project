@@ -3,17 +3,17 @@
 <!-- mcp-name: io.github.kengrary/jvmind-mat -->
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) server for
-analyzing Java heap dumps with [Eclipse MAT](https://eclipse.dev/mat/). It wraps
-the JVMind MAT query service and exposes heap overview, histograms, dominator
-trees, threads, OQL, leak suspects, and OOM diagnosis to MCP clients such as
-Claude Desktop, Cursor, and VS Code.
+analyzing Java heap dumps with [Eclipse MAT](https://eclipse.dev/mat/). It can
+discover local Java processes, capture a live heap dump, and expose heap
+overview, histograms, dominator trees, threads, OQL, leak suspects, and OOM
+diagnosis to MCP clients such as Claude Desktop, Cursor, and VS Code.
 
 Everything runs on your machine. Heap dumps never leave the host; the helper
 service binds to `127.0.0.1` only.
 
 ## Published
 
-- PyPI: <https://pypi.org/project/jvmind-mat-mcp/> (v0.1.1)
+- PyPI: <https://pypi.org/project/jvmind-mat-mcp/> (v0.2.0)
 - Official MCP Registry: `io.github.kengrary/jvmind-mat`
 - MCPRush: <https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp>
 - Install: `uvx jvmind-mat-mcp doctor`
@@ -94,6 +94,24 @@ Restart the client after changing the configuration.
 
 ## Usage
 
+### Live JVM
+
+1. `list_java_processes()` — discover local, attachable JVMs. The managed MAT
+   helper is excluded and secrets in command lines are masked.
+2. `dump_java_heap(pid)` — first call without `confirm=true` returns a preview
+   (target, output directory, estimated/free disk, timeout). Call again with
+   `confirm=true` to capture.
+3. `get_heapdump_status(report_id)` — the dump runs in the background with
+   `status=DUMPING`; MAT parsing starts automatically and the status becomes
+   `PARSING`, then `DONE`.
+4. Analyze with the `mat_*` tools.
+
+A live dump uses `jmap -dump:live`, so it triggers a Full GC and may pause the
+target JVM. The default output directory is the server's current working
+directory; override it with `output_dir` or `JVMIND_MCP_DUMP_DIR`.
+
+### Existing heap dump
+
 1. `open_heapdump(path)` — absolute path to a `.hprof` file. Indexing starts in
    the background and the call returns immediately with a `report_id` and
    `status=PARSING`. If MAT index files already exist next to the dump, the
@@ -120,6 +138,8 @@ All analysis tools take the `report_id` returned by `open_heapdump`.
 - `get_heapdump_status` — poll parse status, progress, and phase
 - `list_heapdumps` — list heap dumps known to this MCP server
 - `close_heapdump` — release a heap dump handle and optionally stop the MAT helper
+- `list_java_processes` — discover local attachable JVMs (pid, main class, command; MAT helper excluded)
+- `dump_java_heap` — preview and capture a live heap dump, then start MAT parsing (confirm=true)
 - `mat_overview` — heap overview: used/committed/live heap, object/class/classloader counts, JDK version
 - `mat_histogram` — class histogram sorted by shallow, retained, or object count
 - `mat_dominator` — dominator tree of the largest retained objects, with parent drill-down
@@ -140,7 +160,13 @@ All analysis tools take the `report_id` returned by `open_heapdump`.
 |---|---|---|
 | `MAT_HOME` | auto-detect | Eclipse MAT install directory |
 | `JVMIND_JAVA` | `JAVA_HOME/bin/java` or `java` | JDK 21 binary |
+| `JVMIND_JCMD` | sibling of `JVMIND_JAVA` | `jcmd` used for process discovery and heap estimates |
+| `JVMIND_JPS` | sibling of `JVMIND_JAVA` | `jps` fallback for process discovery |
+| `JVMIND_JMAP` | sibling of `JVMIND_JAVA` | `jmap` used for live heap dumps |
 | `JVMIND_MAT_XMX` | 70% of RAM, min 4g | Heap for MAT parsing and queries |
+| `JVMIND_MCP_DUMP_DIR` | current working directory | Default output directory for live dumps |
+| `JVMIND_DUMP_TIMEOUT` | `300` | Live dump timeout (seconds) |
+| `JVMIND_DUMP_MIN_FREE_GB` | `2` | Minimum free disk space before a dump |
 | `MAT_QUERY_SERVICE_URL` | managed locally | Use an already-running query service |
 | `MAT_QUERY_PORT` | `8090` | Preferred local port (falls back to a free port) |
 | `MAT_QUERY_CACHE` | `true` | Cache heavy query results on disk |
@@ -157,6 +183,12 @@ State and logs live in `~/.local/state/jvmind-mcp` on Linux (see
 - The MCP server and MAT helper communicate over loopback only.
 - No telemetry, no uploads, no cloud calls.
 - OQL can read arbitrary strings from the heap. Treat query output as sensitive.
+- `list_java_processes` returns command lines; values that look like passwords,
+  tokens, or credentials are masked, but review output before sharing it.
+- Heap dumps and MAT index files contain sensitive heap data. Use a private
+  output directory (the default is the server's current working directory).
+  The `.hprof` is chmod 0600; MAT writes index files with its own permissions,
+  so directory permissions matter.
 - The MAT query service has no authentication; it is bound to `127.0.0.1` and
   must not be exposed to a network.
 
@@ -180,8 +212,23 @@ or analyze a smaller dump.
 **Port already in use** — the server reuses a JVMind query service if it finds
 one, otherwise picks a free port. Set `MAT_QUERY_PORT` to a preferred port.
 
-**Inspect logs** — see `~/.local/state/jvmind-mcp/logs/` (`parse-<id>.log` and
-`mat-service.log`) or run `jvmind-mat-mcp doctor`.
+**No Java processes found** — confirm the same user owns the MCP server and the
+target JVM, that `jcmd`/`jps` come from the JDK 21 install, and that the target
+is in the same PID namespace (containers only see their own processes).
+
+**Attach failed / socket file error** — the target may run with
+`-XX:+DisableAttachMechanism` or under another user. Start it without that flag
+and run the MCP server as the same user. Java 8 targets are supported on a
+best-effort basis.
+
+**Not enough disk space** — set `JVMIND_MCP_DUMP_DIR` to a larger filesystem or
+raise `JVMIND_DUMP_MIN_FREE_GB`. MAT also writes index files next to the dump.
+
+**Dump stays DUMPING** — large heaps can take a long time. Increase
+`JVMIND_DUMP_TIMEOUT`; the target JVM may be paused for a Full GC.
+
+**Inspect logs** — see `~/.local/state/jvmind-mcp/logs/` (`parse-<id>.log`,
+`dump-<id>.log`, and `mat-service.log`) or run `jvmind-mat-mcp doctor`.
 
 ## Development
 
@@ -212,23 +259,19 @@ JVMIND_MCP_IT_HPROF=/path/to/app.hprof \
 Docker (directory/CI checks; MAT and JDK 21 are not included):
 
 ```bash
-docker build -t jvmind-mat-mcp:0.1.1 .
+docker build -t jvmind-mat-mcp:0.2.0 .
 docker run --rm -i \
   -v /opt/mat:/opt/mat:ro \
   -e MAT_HOME=/opt/mat \
-  jvmind-mat-mcp:0.1.1
+  jvmind-mat-mcp:0.2.0
 ```
 
 ## Publishing
 
-`v0.1.1` is published to PyPI and the official MCP Registry. Release tags use
+`v0.2.0` is published to PyPI and the official MCP Registry. Release tags use
 the `mcp-v<version>` form. The GitHub workflow builds the wheel, publishes to
 PyPI with Trusted Publishing, then publishes `server.json` to the official MCP
 Registry with GitHub OIDC.
-
-Release tags use the `mcp-v<version>` form. The GitHub workflow builds the
-wheel, publishes to PyPI with Trusted Publishing, then publishes `server.json`
-to the official MCP Registry with GitHub OIDC.
 
 Manual prerequisites:
 

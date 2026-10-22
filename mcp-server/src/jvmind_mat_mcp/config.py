@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -96,14 +97,33 @@ def _java_command(env: dict[str, str]) -> str:
     return "java"
 
 
+def _jdk_tool(env: dict[str, str], key: str, name: str, java: str) -> str:
+    explicit = _env(env, key)
+    if explicit:
+        return explicit
+    java_path = Path(java)
+    if java_path.parent.name == "bin":
+        suffix = ".exe" if os.name == "nt" else ""
+        candidate = java_path.parent / f"{name}{suffix}"
+        if candidate.is_file():
+            return str(candidate)
+    return shutil.which(name) or name
+
+
 @dataclass(frozen=True)
 class Settings:
     mat_home: Path | None
     java: str
+    jcmd: str
+    jps: str
+    jmap: str
     xmx: str
     service_url: str | None
     preferred_port: int
     state_dir: Path
+    dump_dir: Path
+    dump_timeout: float
+    dump_min_free_gb: float
     query_cache: bool
     http_timeout: float
     poll_interval: float
@@ -118,9 +138,14 @@ class Settings:
             xmx = default_xmx()
         state_dir = _env(env, "JVMIND_MCP_STATE_DIR")
         service_url = _env(env, "MAT_QUERY_SERVICE_URL")
+        java = _java_command(env)
+        dump_dir = _env(env, "JVMIND_MCP_DUMP_DIR") or str(Path.cwd())
         return cls(
             mat_home=Path(mat_home).expanduser() if mat_home else None,
-            java=_java_command(env),
+            java=java,
+            jcmd=_jdk_tool(env, "JVMIND_JCMD", "jcmd", java),
+            jps=_jdk_tool(env, "JVMIND_JPS", "jps", java),
+            jmap=_jdk_tool(env, "JVMIND_JMAP", "jmap", java),
             xmx=xmx,
             service_url=service_url.rstrip("/") if service_url else None,
             preferred_port=_env_int(env, "MAT_QUERY_PORT", DEFAULT_PORT),
@@ -129,6 +154,9 @@ class Settings:
                 if state_dir
                 else Path(user_state_path(APP_NAME, appauthor=False))
             ),
+            dump_dir=Path(dump_dir).expanduser(),
+            dump_timeout=max(1.0, _env_float(env, "JVMIND_DUMP_TIMEOUT", 300.0)),
+            dump_min_free_gb=max(0.0, _env_float(env, "JVMIND_DUMP_MIN_FREE_GB", 2.0)),
             query_cache=_env_bool(env, "MAT_QUERY_CACHE", True),
             http_timeout=_env_float(env, "JVMIND_MCP_HTTP_TIMEOUT", 60.0),
             poll_interval=_env_float(env, "JVMIND_MCP_POLL_INTERVAL", 2.0),

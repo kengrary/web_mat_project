@@ -6,7 +6,7 @@
 > upload → parse → MAT-like web queries → domain diagnostics (connection-pool
 > leaks and more) → natural-language agent diagnosis.
 >
-> **Status**: the Java parser and query service are tested. MCP Server `v0.1.1`
+> **Status**: the Java parser and query service are tested. MCP Server `v0.2.0`
 > is published on PyPI and the official MCP Registry. Python platform
 > integration is still in progress. See [PROJECT-STATUS.md](./PROJECT-STATUS.md).
 
@@ -32,8 +32,9 @@
 ## MCP Server (published)
 
 A local stdio MCP server that exposes MAT heap analysis to Claude Desktop,
-Cursor, and VS Code. Heap dumps never leave the machine; the MAT helper binds to
-`127.0.0.1` only.
+Cursor, and VS Code. It can discover local Java processes and capture a live
+heap dump from a running JVM, or open an existing `.hprof` file. Heap dumps
+never leave the machine; the MAT helper binds to `127.0.0.1` only.
 
 ```bash
 uvx jvmind-mat-mcp doctor      # checks JDK 21 / MAT 1.17 / permissions
@@ -46,9 +47,10 @@ uvx jvmind-mat-mcp doctor      # checks JDK 21 / MAT 1.17 / permissions
 | MCPRush | <https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp> |
 | Documentation | [mcp-server/README.md](./mcp-server/README.md) |
 
-Capabilities: `open_heapdump` → `mat_overview` / `mat_histogram` /
+Capabilities: `list_java_processes` / `dump_java_heap` for live capture,
+`open_heapdump` for existing files, then `mat_overview` / `mat_histogram` /
 `mat_dominator` / `mat_threads` / `mat_object` / `mat_path2gc` / `mat_oql` /
-`mat_leak_suspects` / `mat_diagnose_oom` and more — 17 tools in total.
+`mat_leak_suspects` / `mat_diagnose_oom` and more — 19 tools in total.
 
 Requirements: Python 3.10+, JDK 21+, Eclipse MAT **1.17.x** (a small query
 bundle is installed into MAT on first use).
@@ -61,6 +63,8 @@ All analysis tools take the `report_id` returned by `open_heapdump`.
 - `get_heapdump_status` — poll parse status, progress, and phase
 - `list_heapdumps` — list heap dumps known to this MCP server
 - `close_heapdump` — release a heap dump handle and optionally stop the MAT helper
+- `list_java_processes` — discover local attachable JVMs (pid, main class, command; MAT helper excluded)
+- `dump_java_heap` — preview and capture a live heap dump, then start MAT parsing (confirm=true)
 - `mat_overview` — heap overview: used/committed/live heap, object/class/classloader counts, JDK version
 - `mat_histogram` — class histogram sorted by shallow, retained, or object count
 - `mat_dominator` — dominator tree of the largest retained objects, with parent drill-down
@@ -92,7 +96,7 @@ All analysis tools take the `report_id` returned by `open_heapdump`.
                                   + Leak Suspects / path2gc etc.
          Shared: NFS (dump files) + PostgreSQL (tasks/reports)
 
-  Local MCP path (v0.1.1 published):
+  Local MCP path (v0.2.0 published):
   Claude Desktop / Cursor / VS Code
         │ stdio
         ▼
@@ -155,11 +159,11 @@ All analysis tools take the `report_id` returned by `open_heapdump`.
 | [BUILD-TROUBLESHOOTING.md](./query-service/BUILD-TROUBLESHOOTING.md) | Build troubleshooting (p2 repositories, JDK versions) |
 | `src/.../*.java` (21 files) | Service implementation: core/http/model/task/view/equinox |
 
-### `mcp-server/` — local stdio MCP (✅ v0.1.1 published)
+### `mcp-server/` — local stdio MCP (✅ v0.2.0 published)
 
 | File | Contents |
 |---|---|
-| [README.md](./mcp-server/README.md) | Install, client config, 17 tools, privacy, troubleshooting |
+| [README.md](./mcp-server/README.md) | Install, client config, 19 tools, privacy, troubleshooting |
 | `src/jvmind_mat_mcp/server.py` | MCP SDK tool registration |
 | `src/jvmind_mat_mcp/engine.py` | Heap dump registry, background parsing, MAT lifecycle |
 | `src/jvmind_mat_mcp/vendor/` | Query-service OSGi bundle shipped with the package |
@@ -183,7 +187,7 @@ All analysis tools take the `report_id` returned by `open_heapdump`.
 |---|---|---|---|
 | **parser-cli** | V1 = MAT command; V2 = standalone jar | ✅ V1 tested | `v1-parsehd/mat_parse_runner.py` |
 | **query-service** | OSGi bundle (HTTP :8090) | ✅ tested | `QueryServiceApp.java` / `QueryHttpServer.java` |
-| **mcp-server** | Python stdio MCP (PyPI + official Registry) | ✅ v0.1.1 published | `src/jvmind_mat_mcp/server.py` |
+| **mcp-server** | Python stdio MCP (PyPI + official Registry) | ✅ v0.2.0 published | `src/jvmind_mat_mcp/server.py` |
 | **marketplace** | Directory copy (Smithery skipped) | 🟡 prepared, pending submission | `marketplace/README.md` |
 | **Python integration** | FastAPI + DB + agent | ⏳ in progress | `TODO-PYTHON-TEAM.md` |
 
@@ -206,6 +210,10 @@ All analysis tools take the `report_id` returned by `open_heapdump`.
   `mcp-server/scripts/vendor-bundle.sh`, otherwise the wheel ships a stale bundle.
 - On first use the MCP server writes `com.jvmind.mat.query` into MAT's
   `plugins/` and `bundles.info`; the MAT install must be writable.
+- Live capture uses `jmap -dump:live`: it dumps only live objects, triggers a
+  Full GC, and may pause the target JVM. The default output is the server's
+  current working directory; override it with `JVMIND_MCP_DUMP_DIR` or the
+  tool's `output_dir`.
 - Smithery is skipped for now: its web UI only exposes remote HTTPS URLs and
   the CLI server-creation endpoint was removed. MCPB artifacts are kept for a
   later retry. The Docker image is for directory review; real analysis still

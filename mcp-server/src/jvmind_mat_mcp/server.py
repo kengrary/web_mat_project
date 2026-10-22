@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from mcp.server.mcpserver import Context, MCPServer
+from mcp.types import ToolAnnotations
 
 from . import __version__
 from .config import Settings
@@ -17,15 +18,23 @@ from .tools import Toolbox
 INSTRUCTIONS = """\
 JVMind MAT analyzes Java heap dumps locally with Eclipse MAT.
 
-Workflow:
-1. Call open_heapdump(path) with an absolute path to a .hprof file. Parsing runs
-   in the background and returns immediately with status=PARSING.
-2. Poll get_heapdump_status(report_id) until status=DONE. Large heap dumps can
-   take several minutes.
-3. Call mat_overview first, then mat_histogram / mat_dominator / mat_threads /
+Workflow for a live JVM:
+1. Call list_java_processes to discover local, attachable JVMs.
+2. Call dump_java_heap(pid, confirm=true) to capture a live heap dump. The first
+   call without confirm=true returns a preview. A live dump triggers a Full GC
+   and may pause the target JVM.
+3. Poll get_heapdump_status(report_id) until status=DONE. The dump runs in the
+   background; MAT parsing starts automatically when it finishes.
+4. Call mat_overview first, then mat_histogram / mat_dominator / mat_threads /
    mat_leak_suspects and other tools. All tools take the report_id.
-4. close_heapdump(report_id) releases the local handle; pass stop_service=true
-   to also shut down the MAT helper process.
+
+For an existing .hprof file:
+1. Call open_heapdump(path) with an absolute path. Parsing runs in the
+   background and returns immediately with status=PARSING.
+2. Continue with get_heapdump_status and the mat_* tools.
+
+close_heapdump(report_id) releases the local handle; pass stop_service=true to
+also shut down the MAT helper process.
 
 All heap data stays on this machine. The helper binds to 127.0.0.1 only.
 """
@@ -112,6 +121,55 @@ def create_server(
     )
     def close_heapdump(report_id: str, stop_service: bool = False) -> str:
         return _json(engine.close(report_id, stop_service=stop_service))
+
+    @mcp.tool(
+        name="list_java_processes",
+        description=(
+            "Discover local Java processes that can be attached for a live heap "
+            "dump. Returns pid, main class, command, and masked JVM arguments. "
+            "The managed MAT helper is excluded. / 主动发现本机可 attach 的 Java "
+            "进程，返回 pid、主类、命令行和已掩码的 JVM 参数；MAT 辅助进程会被排除。"
+        ),
+        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    )
+    def list_java_processes() -> str:
+        try:
+            return _json(engine.list_processes())
+        except MatError as exc:
+            return _error(exc)
+
+    @mcp.tool(
+        name="dump_java_heap",
+        description=(
+            "Capture a LIVE heap dump from a running JVM and start MAT parsing. "
+            "First call with confirm=false (default) to preview the target, output "
+            "directory, disk space, and timeout; call again with confirm=true to "
+            "execute. A live dump triggers a Full GC and may pause the target JVM. "
+            "The dump is written to output_dir (default: current working directory) "
+            "and is automatically opened for MAT parsing. / 从运行中的 JVM 抓取 "
+            "live 堆转储并自动开始 MAT 解析。先用默认 confirm=false 预览目标、"
+            "输出目录、磁盘空间和超时，再用 confirm=true 执行。live dump 会触发 "
+            "一次 Full GC，可能暂停目标 JVM；默认输出到当前目录。"
+        ),
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=False,
+            openWorldHint=False,
+        ),
+    )
+    def dump_java_heap(
+        pid: int,
+        output_dir: str | None = None,
+        timeout: int | None = None,
+        confirm: bool = False,
+    ) -> str:
+        try:
+            if not confirm:
+                return _json(engine.preview_dump(pid, output_dir, timeout))
+            return _json(engine.dump(pid, output_dir, timeout))
+        except MatError as exc:
+            return _error(exc)
 
     @mcp.tool(
         name="mat_overview",

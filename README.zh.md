@@ -5,7 +5,7 @@
 > 基于 Eclipse Memory Analyzer (MAT) 内核，为现有 JVMind 平台增加 **Java 堆转储（heapdump）分析能力**：
 > 上传 → 解析 → 类 MAT 的 Web 查询 → 领域诊断（连接池泄漏等）→ 自然语言 Agent 诊断。
 >
-> **当前状态**：Java 侧（解析 + 查询服务）已实测跑通；MCP Server `v0.1.1` 已发布到 PyPI 与官方 MCP Registry；Python 平台串通待开发。详见 [PROJECT-STATUS.md](./PROJECT-STATUS.md)。
+> **当前状态**：Java 侧（解析 + 查询服务）已实测跑通；MCP Server `v0.2.0` 已发布到 PyPI 与官方 MCP Registry；Python 平台串通待开发。详见 [PROJECT-STATUS.md](./PROJECT-STATUS.md)。
 
 ---
 
@@ -22,7 +22,7 @@
 
 ## ⚡ MCP Server（已发布）
 
-本地 stdio MCP Server，把 MAT 的堆分析能力直接接到 Claude Desktop / Cursor / VS Code。堆转储不出本机，MAT 辅助服务只绑 `127.0.0.1`。
+本地 stdio MCP Server，把 MAT 的堆分析能力直接接到 Claude Desktop / Cursor / VS Code。支持主动发现本机 Java 进程并抓取 live 堆转储，也可以直接打开已有 `.hprof` 文件。堆转储不出本机，MAT 辅助服务只绑 `127.0.0.1`。
 
 ```bash
 uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
@@ -35,7 +35,7 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 | MCPRush | <https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp> |
 | 使用文档 | [mcp-server/README.md](./mcp-server/README.md) |
 
-能力：`open_heapdump` → `mat_overview` / `mat_histogram` / `mat_dominator` / `mat_threads` / `mat_object` / `mat_path2gc` / `mat_oql` / `mat_leak_suspects` / `mat_diagnose_oom` 等 17 个工具。
+能力：`list_java_processes` / `dump_java_heap`（在线抓取）、`open_heapdump`（已有文件）→ `mat_overview` / `mat_histogram` / `mat_dominator` / `mat_threads` / `mat_object` / `mat_path2gc` / `mat_oql` / `mat_leak_suspects` / `mat_diagnose_oom` 等 19 个工具。
 
 要求：Python 3.10+、JDK 21+、Eclipse MAT **1.17.x**（首次使用会自动安装一个小型查询 bundle）。
 
@@ -47,6 +47,8 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 - `get_heapdump_status` — 查询解析状态、进度和阶段
 - `list_heapdumps` — 列出本 MCP 服务已知的堆转储
 - `close_heapdump` — 释放堆转储句柄，可选停止 MAT 辅助进程
+- `list_java_processes` — 发现本机可 attach 的 Java 进程（pid、主类、命令行；排除 MAT 辅助进程）
+- `dump_java_heap` — 预览并抓取 live 堆转储，然后自动开始 MAT 解析（confirm=true 执行）
 - `mat_overview` — 堆总览：已用/已提交/存活堆、对象/类/类加载器数量、JDK 版本
 - `mat_histogram` — 类直方图，按 shallow / retained / count 排序
 - `mat_dominator` — 支配树，列出 retained 最大的对象并支持按 parent 下钻
@@ -78,7 +80,7 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
                                   + Leak Suspects/path2gc 等
          共享：NFS(dump 文件) + PostgreSQL(任务/报告)
 
-  本机 MCP 路径（v0.1.1 已发布）：
+  本机 MCP 路径（v0.2.0 已发布）：
   Claude Desktop / Cursor / VS Code
         │ stdio
         ▼
@@ -136,10 +138,10 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 | [BUILD-TROUBLESHOOTING.md](./query-service/BUILD-TROUBLESHOOTING.md) | 构建排错（p2 仓库、JDK 版本匹配） |
 | `src/.../*.java` (21 个) | 服务实现：core/http/model/task/view/equinox |
 
-### 📁 mcp-server/ — 本地 stdio MCP（✅ v0.1.1 已发布）
+### 📁 mcp-server/ — 本地 stdio MCP（✅ v0.2.0 已发布）
 | 文件 | 内容 |
 |---|---|
-| [README.md](./mcp-server/README.md) | 安装、客户端配置、17 个工具、隐私与排错 |
+| [README.md](./mcp-server/README.md) | 安装、客户端配置、19 个工具、隐私与排错 |
 | `src/jvmind_mat_mcp/server.py` | MCP SDK 工具注册入口 |
 | `src/jvmind_mat_mcp/engine.py` | 堆转储注册、后台解析、MAT 服务生命周期 |
 | `src/jvmind_mat_mcp/vendor/` | 随包分发的 query-service OSGi bundle |
@@ -162,7 +164,7 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 |---|---|---|---|
 | **parser-cli** | V1=发行版命令；V2=独立 jar | ✅ V1 实测可用 | `v1-parsehd/mat_parse_runner.py` |
 | **query-service** | OSGi bundle (HTTP :8090) | ✅ 已跑通+实测 | `QueryServiceApp.java` / `QueryHttpServer.java` |
-| **mcp-server** | Python stdio MCP（PyPI + 官方 Registry） | ✅ v0.1.1 已发布 | `src/jvmind_mat_mcp/server.py` |
+| **mcp-server** | Python stdio MCP（PyPI + 官方 Registry） | ✅ v0.2.0 已发布 | `src/jvmind_mat_mcp/server.py` |
 | **marketplace** | 目录提交材料（Smithery 暂跳过） | 🟡 准备完成，待提交 | `marketplace/README.md` |
 | **Python 串通** | FastAPI + DB + agent | ⏳ 待开发 | 见 `TODO-PYTHON-TEAM.md` |
 
@@ -176,6 +178,7 @@ uvx jvmind-mat-mcp doctor      # 检查 JDK 21 / MAT 1.17 / 权限
 - reopen 需要 hprof + index 都在可随机 seek 的文件系统（NFS 满足）。
 - MCP 包名 `jvmind-mat-mcp`，Registry 名 `io.github.kengrary/jvmind-mat`；改完 Java 查询层后必须重跑 `mcp-server/scripts/vendor-bundle.sh`，否则 wheel 里的 bundle 会过期。
 - MCP Server 首次使用会把 `com.jvmind.mat.query` 写入 MAT 的 `plugins/` + `bundles.info`；MAT 安装目录必须可写。
+- 在线抓取使用 `jmap -dump:live`：只 dump 存活对象，会触发一次 Full GC 并可能暂停目标 JVM；默认输出到服务进程当前目录，可用 `JVMIND_MCP_DUMP_DIR` 或工具的 `output_dir` 覆盖。
 - Smithery 暂跳过（网页端只有远程 URL 入口，CLI 创建接口已移除）；MCPB 材料保留备用。Docker 镜像只用于目录审核，真实分析仍需本机 MAT + JDK 21。
 
 ---

@@ -30,8 +30,10 @@ async def test_stdio_initialize_list_and_error_path(tmp_path: Path):
         tools = await session.list_tools()
         names = {tool.name for tool in tools.tools}
         assert "open_heapdump" in names
+        assert "list_java_processes" in names
+        assert "dump_java_heap" in names
         assert "mat_overview" in names
-        assert len(names) == 17
+        assert len(names) == 19
 
         result = await session.call_tool("open_heapdump", {"path": str(tmp_path / "missing.hprof")})
         assert result.content

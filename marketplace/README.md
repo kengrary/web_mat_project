@@ -8,7 +8,7 @@ Canonical metadata for every directory: [`metadata.json`](./metadata.json).
 | [mcp.so](./mcp.so.md) | Web form (free review or $39 paid) | ✓ public | Copy ready; account + form submission pending |
 | [Glama](./glama.md) | Web form + Dockerfile | ✓ public | Copy + Dockerfile ready; account + form submission pending |
 | [PulseMCP](./pulsemcp.md) | Official Registry ingest / web form | ✓ public | Likely automatic; check in browser |
-| [MCPRush](https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp) | Auto-indexed | ✓ public | Listed: Grade A, trust 94/100, 19 tools; v0.2.0 rescan pending |
+| [MCPRush](https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp) | Auto-indexed | ✓ public | Listed: Grade A, trust 94/100; currently v0.1.1 (17 tools), v0.2.0 rescan pending |
 
 Already published:
 
@@ -40,7 +40,7 @@ URL flow, and its CLI/API server-creation endpoint returns
 MCPRush picked the server up automatically; no submission was required. The
 listing currently shows:
 
-- Grade A, trust score 94/100, 19 tools; v0.2.0 rescan pending
+- Grade A, trust score 94/100; currently v0.1.1 with 17 tools; v0.2.0 rescan pending
 - “Source is public, though no licence is declared” — the scan predates the
   MIT `LICENSE`; a rescan or the next PyPI release should clear this
 - Tool descriptions and parameter schemas were not read because the scan was

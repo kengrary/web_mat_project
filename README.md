@@ -1,5 +1,7 @@
 # JVMind × MAT — Heap Dump Analysis
 
+[![JVMind MAT Heap Dump Analyzer MCP server](https://mcprush.com/badge/jvmind-mat-heap-dump-analyzer-mcp/card.svg)](https://mcprush.com/to/jvmind-mat-heap-dump-analyzer-mcp?ref=badge)
+
 **English** | [中文](./README.zh.md)
 
 > Java heap dump analysis built on the Eclipse Memory Analyzer (MAT) engine:

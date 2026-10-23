@@ -1,5 +1,7 @@
 # JVMind × MAT — Heapdump 智能分析模块
 
+[![JVMind MAT Heap Dump Analyzer MCP server](https://mcprush.com/badge/jvmind-mat-heap-dump-analyzer-mcp/card.svg)](https://mcprush.com/to/jvmind-mat-heap-dump-analyzer-mcp?ref=badge)
+
 [English](./README.md) | **中文**
 
 > 基于 Eclipse Memory Analyzer (MAT) 内核，为现有 JVMind 平台增加 **Java 堆转储（heapdump）分析能力**：

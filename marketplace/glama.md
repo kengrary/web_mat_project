@@ -31,7 +31,7 @@ Fill the fields with:
 | Python version | `3.12` (the template defaults to 3.15 preview; override it if possible) |
 | Build command | `UV_TOOL_BIN_DIR=/usr/local/bin uv tool install --python 3.12 ./mcp-server` |
 | Start command | `jvmind-mat-mcp` |
-| System packages (optional) | `openjdk-21-jdk-headless` |
+| System packages | leave empty (see note below) |
 | Environment | `JVMIND_MCP_STATE_DIR=/tmp/jvmind-mcp-state`, `JVMIND_MCP_DUMP_DIR=/tmp/jvmind-mcp-dumps` |
 
 The generated file should end with:
@@ -48,10 +48,24 @@ instead (requires network at container start):
 uvx --python 3.12 --from /app/mcp-server jvmind-mat-mcp
 ```
 
+**Do not put `openjdk-21-jdk-headless` in the separate “System packages” field.**
+Glama appends `apt-get install ...` after the base image has already run
+`apt-get clean && rm -rf /var/lib/apt/lists/*`, so it fails with
+`Unable to locate package`. If you want JDK in the image, install it inside the
+build command after `apt-get update`:
+
+```bash
+apt-get update && apt-get install -y --no-install-recommends default-jdk-headless && rm -rf /var/lib/apt/lists/* && UV_TOOL_BIN_DIR=/usr/local/bin uv tool install --python 3.12 ./mcp-server
+```
+
+`default-jdk-headless` is safer than pinning `openjdk-21-jdk-headless`; use the
+latter only if the Debian trixie apt index provides it. Without JDK, Glama can
+still list the 19 tools; live JVM tools report a JDK-tool-not-found error, and
+MAT analysis still needs MAT on the user's machine.
+
 The generated image does not include Eclipse MAT. MCP `initialize` and
 `tools/list` work; `mat_*` calls return an actionable “MAT not found” error until
-MAT is mounted. The live JVM tools need the optional JDK package; without it
-they return a JDK-tool-not-found error.
+MAT is mounted.
 
 ## Environment variables JSON schema
 

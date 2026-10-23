@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import logging
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from . import __version__
 from .config import Settings
@@ -251,14 +252,57 @@ def create_server(
 
     @mcp.tool(
         name="mat_path2gc",
+        title="Path to GC roots",
         description=(
-            "Shortest path from the object to a GC root (shows why an object is "
-            "reachable and not collected). excludeWeakSoft defaults true. / "
-            "对象到 GC Root 的最短路径（说明对象为何可达未回收）。"
-            "excludeWeakSoft 默认 true。"
+            "Read-only, synchronous lookup of the shortest reference chains from one "
+            "object to GC roots, explaining why that object is still reachable and "
+            "not collected. Returns up to five linear paths plus MAT's path tree. "
+            "Typical flow: get an object id from mat_object, mat_histogram, "
+            "mat_dominator, or a mat_leak_suspects preferredObjectId, confirm it with "
+            "mat_object, then call this tool. Use mat_dominator instead when you want "
+            "to know which object retains an entire subtree; use mat_leak_suspects "
+            "when you do not yet have a specific object. Requires the report_id of a "
+            "parsed dump (status=DONE)."
+        ),
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
         ),
     )
-    def mat_path2gc(report_id: str, object: str, excludeWeakSoft: bool = True) -> str:
+    def mat_path2gc(
+        report_id: Annotated[
+            str,
+            Field(
+                description=(
+                    "Report ID returned by open_heapdump or dump_java_heap; the "
+                    "dump must have finished parsing (status must be DONE)."
+                )
+            ),
+        ],
+        object: Annotated[
+            str,
+            Field(
+                description=(
+                    "MAT object id as a decimal integer, copied from the objectId / "
+                    "preferredObjectId field of mat_object, mat_histogram, "
+                    "mat_dominator, or mat_leak_suspects. This endpoint does not "
+                    "accept 0x-prefixed hex."
+                )
+            ),
+        ],
+        excludeWeakSoft: Annotated[
+            bool,
+            Field(
+                description=(
+                    "true (default) ignores paths through weak, soft, and phantom "
+                    "references, so only strong references that actually pin the "
+                    "object are shown. false includes reference types the GC may "
+                    "clear."
+                )
+            ),
+        ] = True,
+    ) -> str:
         return toolbox.path2gc(report_id, object, excludeWeakSoft=excludeWeakSoft)
 
     @mcp.tool(
@@ -326,23 +370,76 @@ def create_server(
 
     @mcp.tool(
         name="mat_top_consumers",
+        title="Top memory consumers",
         description=(
-            "Top memory consumers (biggest objects/classes by retained heap). / "
-            "内存占用 Top（按 retained 排序的最大对象/类）。"
+            "Read-only Top Consumers report: biggest individual objects plus "
+            "retained-size breakdowns by class, class loader, and package. Use this "
+            "as a quick 'who is using the most memory' overview after mat_overview. "
+            "Prefer mat_histogram when you need a sortable list of every class with "
+            "instance counts and shallow/retained sizes, and mat_dominator when you "
+            "need to walk the object graph downward from a specific parent object. "
+            "Requires the report_id of a parsed dump (status=DONE)."
+        ),
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
         ),
     )
-    def mat_top_consumers(report_id: str) -> str:
+    def mat_top_consumers(
+        report_id: Annotated[
+            str,
+            Field(
+                description=(
+                    "Report ID returned by open_heapdump or dump_java_heap; the "
+                    "dump must have finished parsing (status must be DONE)."
+                )
+            ),
+        ],
+    ) -> str:
         return toolbox.top_consumers(report_id)
 
     @mcp.tool(
         name="mat_sql_in_threads",
+        title="SQL in thread stacks",
         description=(
-            "Find SQL statements (JDBC PreparedStatement) in thread stacks — useful "
-            "for finding long-running queries at OOM. / 在线程栈中找 SQL（JDBC "
-            "PreparedStatement），用于定位 OOM 时还在执行的慢查询。"
+            "Read-only scan of thread stacks for JDBC PreparedStatement objects and "
+            "SQL strings, used to spot long-running or heavy queries held by threads "
+            "at OOM time. Requires the report_id of a parsed dump (status=DONE). "
+            "Results are sorted risky-first, then by the owning thread's retained "
+            "heap, and include threadId, threadName, threadRetainedBytes, frame, "
+            "source, objectId, sql, risk (risky|harmless|unknown), and reason. With "
+            "onlyRisky=true, heartbeat/validation statements such as SELECT 1, "
+            "SELECT 'x', /* ping */ and VALUES(1) are filtered out; pass "
+            "onlyRisky=false to see all SQL-like strings."
+        ),
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            idempotentHint=True,
+            openWorldHint=False,
         ),
     )
-    def mat_sql_in_threads(report_id: str, onlyRisky: bool = True) -> str:
+    def mat_sql_in_threads(
+        report_id: Annotated[
+            str,
+            Field(
+                description=(
+                    "Report ID returned by open_heapdump or dump_java_heap; the "
+                    "dump must have finished parsing (status must be DONE)."
+                )
+            ),
+        ],
+        onlyRisky: Annotated[
+            bool,
+            Field(
+                description=(
+                    "true (default) drops harmless heartbeat/validation SQL "
+                    "(SELECT 1, SELECT 'x', /* ping */, VALUES(1)); false returns "
+                    "every SQL-like string found."
+                )
+            ),
+        ] = True,
+    ) -> str:
         return toolbox.sql_in_threads(report_id, onlyRisky=onlyRisky)
 
     return mcp

@@ -53,6 +53,63 @@ The generated image does not include Eclipse MAT. MCP `initialize` and
 MAT is mounted. The live JVM tools need the optional JDK package; without it
 they return a JDK-tool-not-found error.
 
+## Environment variables JSON schema
+
+Paste this into Glama's “Environment variables JSON schema” field. All variables
+are optional so the server can still start without MAT; real heap analysis needs
+`MAT_HOME` and JDK 21.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "MAT_HOME": {
+      "type": "string",
+      "title": "Eclipse MAT home",
+      "description": "Directory containing plugins/ and configuration/ for Eclipse MAT 1.17.x. Leave empty to auto-detect.",
+      "default": ""
+    },
+    "JVMIND_JAVA": {
+      "type": "string",
+      "title": "JDK 21 java binary",
+      "description": "Path to the java executable (JDK 21+). Defaults to JAVA_HOME/bin/java or java on PATH.",
+      "default": "java"
+    },
+    "JVMIND_MAT_XMX": {
+      "type": "string",
+      "title": "MAT heap size",
+      "description": "JVM heap for MAT parsing and queries, for example 8g. Defaults to 70% of RAM, minimum 4g.",
+      "default": "8g"
+    },
+    "JVMIND_MCP_STATE_DIR": {
+      "type": "string",
+      "title": "State directory",
+      "description": "Directory for state, logs, and parsed report registry.",
+      "default": "/tmp/jvmind-mcp-state"
+    },
+    "JVMIND_MCP_DUMP_DIR": {
+      "type": "string",
+      "title": "Heap dump directory",
+      "description": "Default output directory for live heap dumps.",
+      "default": "/tmp/jvmind-mcp-dumps"
+    },
+    "JVMIND_DUMP_TIMEOUT": {
+      "type": "string",
+      "title": "Dump timeout (seconds)",
+      "description": "Timeout for a live heap dump, 1-3600 seconds.",
+      "default": "300"
+    },
+    "JVMIND_DUMP_MIN_FREE_GB": {
+      "type": "string",
+      "title": "Minimum free disk space (GB)",
+      "description": "Refuse to start a dump when free space is below this value.",
+      "default": "2"
+    }
+  },
+  "required": []
+}
+```
+
 ## Self-hosting Dockerfile
 
 The repo-root [`Dockerfile`](../Dockerfile) is for local/self-hosting (JDK 21

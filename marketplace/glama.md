@@ -130,11 +130,11 @@ The repo-root [`Dockerfile`](../Dockerfile) is for local/self-hosting (JDK 21
 included, non-root). Glama does not use it.
 
 ```bash
-docker build -t jvmind-mat-mcp:0.2.0 .
+docker build -t jvmind-mat-mcp:0.2.1 .
 docker run --rm -i \
   -v /opt/mat:/opt/mat \
   -e MAT_HOME=/opt/mat \
-  jvmind-mat-mcp:0.2.0
+  jvmind-mat-mcp:0.2.1
 ```
 
 `mcp-server/Dockerfile` remains a smaller Python-only image for package-level
@@ -145,7 +145,7 @@ checks.
 - Glama may auto-index the repo after it becomes public; submitting explicitly
   is still useful for claiming the listing.
 - A public repo plus a working Dockerfile materially improves the quality
-  grade. The repository now has an MIT `LICENSE`; the published PyPI 0.2.0
+  grade. The repository now has an MIT `LICENSE`; the published PyPI 0.2.1
   metadata includes it.
 - Docker Hub was unreachable from the workstation used to prepare this, but the
   GitHub Actions CI workflow builds the image successfully.

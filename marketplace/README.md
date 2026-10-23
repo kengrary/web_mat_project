@@ -12,8 +12,8 @@ Canonical metadata for every directory: [`metadata.json`](./metadata.json).
 
 Already published:
 
-- Official MCP Registry: `io.github.kengrary/jvmind-mat` v0.2.0
-- PyPI: `jvmind-mat-mcp` 0.2.0
+- Official MCP Registry: `io.github.kengrary/jvmind-mat` v0.2.1
+- PyPI: `jvmind-mat-mcp` 0.2.1
 - MCPRush: <https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp>
   (auto-indexed; Grade A, trust 94/100)
 

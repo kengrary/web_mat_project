@@ -13,7 +13,7 @@ service binds to `127.0.0.1` only.
 
 ## Published
 
-- PyPI: <https://pypi.org/project/jvmind-mat-mcp/> (v0.2.0)
+- PyPI: <https://pypi.org/project/jvmind-mat-mcp/> (v0.2.1)
 - Official MCP Registry: `io.github.kengrary/jvmind-mat`
 - MCPRush: <https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp>
 - Install: `uvx jvmind-mat-mcp doctor`
@@ -259,16 +259,16 @@ JVMIND_MCP_IT_HPROF=/path/to/app.hprof \
 Docker (directory/CI checks; MAT and JDK 21 are not included):
 
 ```bash
-docker build -t jvmind-mat-mcp:0.2.0 .
+docker build -t jvmind-mat-mcp:0.2.1 .
 docker run --rm -i \
   -v /opt/mat:/opt/mat:ro \
   -e MAT_HOME=/opt/mat \
-  jvmind-mat-mcp:0.2.0
+  jvmind-mat-mcp:0.2.1
 ```
 
 ## Publishing
 
-`v0.2.0` is published to PyPI and the official MCP Registry. Release tags use
+`v0.2.1` is published to PyPI and the official MCP Registry. Release tags use
 the `mcp-v<version>` form. The GitHub workflow builds the wheel, publishes to
 PyPI with Trusted Publishing, then publishes `server.json` to the official MCP
 Registry with GitHub OIDC.

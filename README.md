@@ -8,7 +8,7 @@
 > upload → parse → MAT-like web queries → domain diagnostics (connection-pool
 > leaks and more) → natural-language agent diagnosis.
 >
-> **Status**: the Java parser and query service are tested. MCP Server `v0.2.0`
+> **Status**: the Java parser and query service are tested. MCP Server `v0.2.1`
 > is published on PyPI and the official MCP Registry. Python platform
 > integration is still in progress. See [PROJECT-STATUS.md](./PROJECT-STATUS.md).
 
@@ -98,7 +98,7 @@ All analysis tools take the `report_id` returned by `open_heapdump`.
                                   + Leak Suspects / path2gc etc.
          Shared: NFS (dump files) + PostgreSQL (tasks/reports)
 
-  Local MCP path (v0.2.0 published):
+  Local MCP path (v0.2.1 published):
   Claude Desktop / Cursor / VS Code
         │ stdio
         ▼
@@ -161,7 +161,7 @@ All analysis tools take the `report_id` returned by `open_heapdump`.
 | [BUILD-TROUBLESHOOTING.md](./query-service/BUILD-TROUBLESHOOTING.md) | Build troubleshooting (p2 repositories, JDK versions) |
 | `src/.../*.java` (21 files) | Service implementation: core/http/model/task/view/equinox |
 
-### `mcp-server/` — local stdio MCP (✅ v0.2.0 published)
+### `mcp-server/` — local stdio MCP (✅ v0.2.1 published)
 
 | File | Contents |
 |---|---|
@@ -189,7 +189,7 @@ All analysis tools take the `report_id` returned by `open_heapdump`.
 |---|---|---|---|
 | **parser-cli** | V1 = MAT command; V2 = standalone jar | ✅ V1 tested | `v1-parsehd/mat_parse_runner.py` |
 | **query-service** | OSGi bundle (HTTP :8090) | ✅ tested | `QueryServiceApp.java` / `QueryHttpServer.java` |
-| **mcp-server** | Python stdio MCP (PyPI + official Registry) | ✅ v0.2.0 published | `src/jvmind_mat_mcp/server.py` |
+| **mcp-server** | Python stdio MCP (PyPI + official Registry) | ✅ v0.2.1 published | `src/jvmind_mat_mcp/server.py` |
 | **marketplace** | Directory copy (Smithery skipped) | 🟡 prepared, pending submission | `marketplace/README.md` |
 | **Python integration** | FastAPI + DB + agent | ⏳ in progress | `TODO-PYTHON-TEAM.md` |
 

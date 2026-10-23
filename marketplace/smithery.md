@@ -11,8 +11,8 @@ for a public MCP endpoint.
 - Smithery extended manifest: [`smithery/manifest.smithery.json`](./smithery/manifest.smithery.json)
   (adds `inputSchema` to every tool)
 - Build script: `mcp-server/scripts/build-mcpb.sh`
-- Standard bundle: `mcp-server/dist/jvmind-mat-mcp-0.2.0.mcpb`
-- Smithery bundle: `mcp-server/dist/jvmind-mat-smithery-0.2.0.mcpb`
+- Standard bundle: `mcp-server/dist/jvmind-mat-mcp-0.2.1.mcpb`
+- Smithery bundle: `mcp-server/dist/jvmind-mat-smithery-0.2.1.mcpb`
 - Runtime: `uv` (the host runs the Python package; `uv.lock` pins dependencies)
 
 The manifests expose two optional user settings: `mat_home` (directory) and
@@ -44,7 +44,7 @@ dashboard:
 3. Display name: `JVMind MAT Heap Dump Analyzer`.
 4. Description: `Analyze Java heap dumps locally with Eclipse MAT.`
 5. If the dashboard offers an MCPB upload, upload
-   `mcp-server/dist/jvmind-mat-smithery-0.2.0.mcpb`; otherwise create the
+   `mcp-server/dist/jvmind-mat-smithery-0.2.1.mcpb`; otherwise create the
    server metadata and continue below.
 
 ## Publish a release
@@ -57,7 +57,7 @@ mcp-server/scripts/build-mcpb.sh
 
 npx --yes smithery auth login
 npx --yes smithery mcp publish \
-  mcp-server/dist/jvmind-mat-smithery-0.2.0.mcpb \
+  mcp-server/dist/jvmind-mat-smithery-0.2.1.mcpb \
   -n kengrary/jvmind-mat
 ```
 

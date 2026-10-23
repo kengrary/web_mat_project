@@ -21,26 +21,31 @@ automated safety and quality checks.
 
 ## Dockerfile
 
-Use `mcp-server/Dockerfile` (build context: `mcp-server/`):
+Use the repo-root [`Dockerfile`](../Dockerfile) (build context: repository root):
 
 ```bash
-docker build -t jvmind-mat-mcp:0.2.0 mcp-server
+docker build -t jvmind-mat-mcp:0.2.0 .
 ```
 
-The image contains the MCP server and its Python dependencies. It does **not**
-include Eclipse MAT or JDK 21; those are runtime dependencies for heap analysis.
-For a self-contained analysis image, mount MAT into the container and set
+The image includes Python 3.12 and JDK 21, runs as a non-root user, and contains
+the MCP server plus its Python dependencies. It does **not** include Eclipse MAT
+(EPL-2.0, not redistributed). For heap analysis, mount MAT writable and set
 `MAT_HOME`:
 
 ```bash
 docker run --rm -i \
-  -v /opt/mat:/opt/mat:ro \
+  -v /opt/mat:/opt/mat \
   -e MAT_HOME=/opt/mat \
   jvmind-mat-mcp:0.2.0
 ```
 
-The MCP `initialize` and `tools/list` calls work without MAT; analysis tools
-return an actionable “MAT not found” error until it is available.
+The MCP `initialize`, `tools/list`, and `list_java_processes` calls work without
+MAT; analysis tools return an actionable “MAT not found” error until it is
+available. If the MAT mount is not writable by UID 10001, run the container with
+your host UID or pre-install the query bundle.
+
+`mcp-server/Dockerfile` remains a smaller Python-only image for package-level
+checks; Glama should use the root `Dockerfile`.
 
 ## Notes
 

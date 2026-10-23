@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - "mcp-server/**"
+      - "Dockerfile"
       - ".github/workflows/mcp-ci.yml"
   pull_request:
     paths:
       - "mcp-server/**"
+      - "Dockerfile"
       - ".github/workflows/mcp-ci.yml"
 
 jobs:
@@ -34,5 +36,8 @@ jobs:
           node-version: "20"
       - name: Build and validate MCPB
         run: ./scripts/build-mcpb.sh
-      - name: Build Docker image
+      - name: Build package Docker image
         run: docker build -t jvmind-mat-mcp:ci .
+      - name: Build Glama Docker image
+        working-directory: ${{ github.workspace }}
+        run: docker build -t jvmind-mat-mcp:ci-root .

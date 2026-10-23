@@ -19,33 +19,55 @@ The modal submits to `/api/mcp/servers/submit` and requires a Glama account.
 After approval, Glama emails instructions for supplying a Dockerfile used for
 automated safety and quality checks.
 
-## Dockerfile
+## Glama's generated Dockerfile
 
-Use the repo-root [`Dockerfile`](../Dockerfile) (build context: repository root):
+Glama does not accept a custom Dockerfile. It generates one from the repository
+and the submission fields, then wraps the stdio server with `mcp-proxy`.
+
+Fill the fields with:
+
+| Field | Value |
+|---|---|
+| Python version | `3.12` (the template defaults to 3.15 preview; override it if possible) |
+| Build command | `UV_TOOL_BIN_DIR=/usr/local/bin uv tool install --python 3.12 ./mcp-server` |
+| Start command | `jvmind-mat-mcp` |
+| System packages (optional) | `openjdk-21-jdk-headless` |
+| Environment | `JVMIND_MCP_STATE_DIR=/tmp/jvmind-mcp-state`, `JVMIND_MCP_DUMP_DIR=/tmp/jvmind-mcp-dumps` |
+
+The generated file should end with:
+
+```dockerfile
+CMD ["mcp-proxy","--","jvmind-mat-mcp"]
+```
+
+`uv tool install` puts the console script in `/usr/local/bin`, so `mcp-proxy`
+can resolve it. If the form has no build command field, use this start command
+instead (requires network at container start):
+
+```bash
+uvx --python 3.12 --from /app/mcp-server jvmind-mat-mcp
+```
+
+The generated image does not include Eclipse MAT. MCP `initialize` and
+`tools/list` work; `mat_*` calls return an actionable “MAT not found” error until
+MAT is mounted. The live JVM tools need the optional JDK package; without it
+they return a JDK-tool-not-found error.
+
+## Self-hosting Dockerfile
+
+The repo-root [`Dockerfile`](../Dockerfile) is for local/self-hosting (JDK 21
+included, non-root). Glama does not use it.
 
 ```bash
 docker build -t jvmind-mat-mcp:0.2.0 .
-```
-
-The image includes Python 3.12 and JDK 21, runs as a non-root user, and contains
-the MCP server plus its Python dependencies. It does **not** include Eclipse MAT
-(EPL-2.0, not redistributed). For heap analysis, mount MAT writable and set
-`MAT_HOME`:
-
-```bash
 docker run --rm -i \
   -v /opt/mat:/opt/mat \
   -e MAT_HOME=/opt/mat \
   jvmind-mat-mcp:0.2.0
 ```
 
-The MCP `initialize`, `tools/list`, and `list_java_processes` calls work without
-MAT; analysis tools return an actionable “MAT not found” error until it is
-available. If the MAT mount is not writable by UID 10001, run the container with
-your host UID or pre-install the query bundle.
-
 `mcp-server/Dockerfile` remains a smaller Python-only image for package-level
-checks; Glama should use the root `Dockerfile`.
+checks.
 
 ## Notes
 

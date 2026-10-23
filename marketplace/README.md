@@ -6,7 +6,7 @@ Canonical metadata for every directory: [`metadata.json`](./metadata.json).
 |---|---|---|---|
 | [Smithery](./smithery.md) | Local MCPB upload | ✓ public | **Skipped**: the dashboard only offers remote HTTPS URLs; the CLI create endpoint was removed |
 | [mcp.so](./mcp.so.md) | Web form (free review or $39 paid) | ✓ public | Copy ready; account + form submission pending |
-| [Glama](./glama.md) | Web form + Dockerfile | ✓ public | Copy + Dockerfile ready; account + form submission pending |
+| [Glama](./glama.md) | Web form + generated Dockerfile | ✓ public | Copy + generated-Dockerfile fields ready; account + form submission pending |
 | [PulseMCP](./pulsemcp.md) | Official Registry ingest / web form | ✓ public | Likely automatic; check in browser |
 | [MCPRush](https://mcprush.com/kengrary/jvmind-mat-heap-dump-analyzer-mcp) | Auto-indexed | ✓ public | Listed: Grade A, trust 94/100; currently v0.1.1 (17 tools), v0.2.0 rescan pending |
 
